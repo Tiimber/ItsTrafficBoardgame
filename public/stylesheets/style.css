@@ -1,8 +1,24 @@
 body {
-  padding: 50px;
-  font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
+  /*padding: 50px;*/
+  /*font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;*/
 }
 
 a {
-  color: #00B7FF;
+  display: block;
+  margin: 0.5em 0;
+  color: #00b7ff;
+}
+
+a.inline {
+  display: inline-block;
+}
+
+a.positive {
+  font-weight: bold;
+  color: #349723;
+}
+
+a.negative {
+  font-weight: bold;
+  color: #aaaaaa;
 }

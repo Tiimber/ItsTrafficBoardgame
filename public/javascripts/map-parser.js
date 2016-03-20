@@ -5,6 +5,7 @@ var resolution = 1000;
 //var resolution = 4000; // Example - really blown up
 var wayHeightMapPct = 0.015;
 var highlighted = [];
+var nextClick = null;
 
 var wayPartColor = 0xffffff;
 var nodeColor = 0xccccff;
@@ -79,7 +80,26 @@ function selectHighlights() {
     }
 }
 
-function printInfo(title, data) {
+function printInfo(title, data, cancelBtn, okCb) {
+    var i;
+    if (nextClick) {
+        if (nextClick.type === 'move') {
+            for (i = 0; i < data.length; i++) {
+                var mergeWith = data[i].object || data[i];
+                if (mergeWith.originType === 'node' && mergeWith.originId !== nextClick.obj) {
+                    title = 'Confirm moving first node into second?';
+                    cancelBtn = true;
+                    data = [].concat(highlighted);
+                    data.push(mergeWith);
+                    okCb = function() {
+                        mergeNodes(data)
+                    };
+                }
+            }
+        }
+    }
+
+    nextClick = null;
     var dataArea = document.querySelector('#dataArea');
     dataArea.innerHTML = '';
 
@@ -87,12 +107,30 @@ function printInfo(title, data) {
     titleObj.innerHTML = title;
     dataArea.appendChild(titleObj);
 
-    for (var i = 0; i < data.length; i++) {
+    for (i = 0; i < data.length; i++) {
         var itemData = document.createElement('div');
         itemData.style.marginLeft = '1em';
         var object = data[i].object || data[i];
         itemData.innerHTML = '- Type: ' + object.originType + ', info: ' + getInfo(object.originType, object.originId);
         dataArea.appendChild(itemData);
+    }
+
+    if (okCb) {
+        var okBtnObj = document.createElement('a');
+        okBtnObj.className = 'positive';
+        okBtnObj.innerHTML = 'Confirm!';
+        okBtnObj.onclick = okCb;
+        dataArea.appendChild(okBtnObj);
+    }
+
+    if (cancelBtn) {
+        var cancelBtnObj = document.createElement('a');
+        cancelBtnObj.className = 'negative';
+        cancelBtnObj.innerHTML = 'Cancel';
+        cancelBtnObj.onclick = function(){
+            printInfo('', []);
+        };
+        dataArea.appendChild(cancelBtnObj);
     }
 
     deselectHighlights();
@@ -123,15 +161,27 @@ function canRemove(type, id) {
     return false;
 }
 
+function canMerge(type, id) {
+    if (type === 'node') {
+        // Can merge node only if it is an endpoint of one way
+        var node = getNode(id);
+        return node.wayObjects && node.wayObjects.length === 1 && (node.wayObjects[0].nd[0].$.ref === id || node.wayObjects[0].nd[node.wayObjects[0].nd.length-1].$.ref === id);
+    }
+    return false;
+}
+
 function getInfo(type, id) {
     var data;
     if (type === 'waypart') {
         var wayForPart = globalMapData.way[id];
-        data = 'Part of <a onclick="highlightWayAndNodes(\'' + id + '\');">' + (wayForPart.tag.name ? wayForPart.tag.name : '?') + '</a>';
+        data = 'Part of <a class="inline" onclick="highlightWayAndNodes(\'' + id + '\');">' + (wayForPart.tag.name ? wayForPart.tag.name : '?') + '</a>';
     } else {
         data = getTags(globalMapData[type][id]);
         if (canRemove(type, id)) {
-            data += ' [<a onclick="removeMapObj(\'' + type + '\', \'' + id + '\')">DELETE</a>]';
+            data += ' [<a class="inline" onclick="removeMapObj(\'' + type + '\', \'' + id + '\')">DELETE</a>]';
+        }
+        if (canMerge(type, id)) {
+            data += ' [<a class="inline" onclick="mergeMapObj(\'' + type + '\', \'' + id + '\')">MOVE INTO OTHER POINT</a>]';
         }
     }
     return data;
@@ -157,6 +207,10 @@ function doRemoveNode(nodeId) {
             break;
         }
     }
+    cleanupAndRerender();
+}
+
+function cleanupAndRerender() {
     cleanCrossRefs();
     for(var childIndex = scene.children.length - 1; childIndex >= 0; childIndex--) {
         scene.remove(scene.children[childIndex]);
@@ -171,13 +225,45 @@ function removeMapObj(type, id) {
         var child = scene.children[i];
         if (child.originType === type && child.originId === id) {
             removeChild = child;
-            printInfo('Removal request:', [child]);
+            printInfo('Remove selected node?', [child], true, function(){
+                doRemoveNode(id);
+            });
             break;
         }
     }
-    if (confirm('Are you sure you want to remove this node?')) {
-        doRemoveNode(id);
+}
+
+function mergeNodes(data) {
+    var nodeToReplace = (data[0].object || data[0]).originId;
+    var nodeToReplaceWith = (data[1].object || data[1]).originId;
+
+    var nodeObjToReplace = getNode(nodeToReplace);
+    var nodeObjToReplaceWith = getNode(nodeToReplaceWith);
+    for (var wayIndex = 0; wayIndex < nodeObjToReplace.wayObjects.length; wayIndex++) {
+        var way = nodeObjToReplace.wayObjects[wayIndex];
+        for (var nodeIndex = 0; nodeIndex < way.nd.length; nodeIndex++) {
+            if (way.nd[nodeIndex].$.ref === nodeToReplace) {
+                way.nd[nodeIndex].$.ref = nodeToReplaceWith;
+                break;
+            }
+        }
     }
+    delete globalMapData.node[nodeToReplace];
+
+    cleanupAndRerender();
+}
+
+function mergeMapObj(type, id) {
+    var moveChild;
+    for (var i = 0; i < scene.children.length; i++) {
+        var child = scene.children[i];
+        if (child.originType === type && child.originId === id) {
+            moveChild = child;
+            printInfo('Move node into other (click on the one to merge with):', [child], true);
+            break;
+        }
+    }
+    nextClick = {type: 'move', obj: child};
 }
 
 function initCanvas() {
@@ -215,7 +301,7 @@ function initCanvas() {
             ((event.clientX - canvasX) / canvasWidth) * 2 - 1,
             - ((event.clientY - canvasY) / canvasHeight) * 2 + 1
         );
-        hover(scene, camera, raycaster, relativePoint);
+        mouseOn(scene, camera, raycaster, relativePoint);
     }, false);
 
 
@@ -229,7 +315,7 @@ function initCanvas() {
     render();
 }
 
-function hover(scene, camera, raycaster, pos) {
+function mouseOn(scene, camera, raycaster, pos) {
     raycaster.setFromCamera(pos, camera);
     var intersects = raycaster.intersectObjects(scene.children);
     var title = 'Items for clicked position "' + pos.x.toFixed(3) + ', ' + pos.y.toFixed(3) + '":';
