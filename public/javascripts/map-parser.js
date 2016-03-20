@@ -6,6 +6,7 @@ var resolution = 1000;
 var wayHeightMapPct = 0.015;
 var highlighted = [];
 var nextClick = null;
+var rollingUniqueId = 0;
 
 var wayPartColor = 0xffffff;
 var nodeColor = 0xccccff;
@@ -111,7 +112,7 @@ function printInfo(title, data, cancelBtn, okCb) {
         var itemData = document.createElement('div');
         itemData.style.marginLeft = '1em';
         var object = data[i].object || data[i];
-        itemData.innerHTML = '- Type: ' + object.originType + ', info: ' + getInfo(object.originType, object.originId);
+        itemData.innerHTML = '- Type: ' + object.originType + ', info: ' + getInfo(object.originType, object.originId, object.originWPId);
         dataArea.appendChild(itemData);
     }
 
@@ -170,11 +171,12 @@ function canMerge(type, id) {
     return false;
 }
 
-function getInfo(type, id) {
+function getInfo(type, id, wayPartId) {
     var data;
     if (type === 'waypart') {
         var wayForPart = globalMapData.way[id];
         data = 'Part of <a class="inline" onclick="highlightWayAndNodes(\'' + id + '\');">' + (wayForPart.tag.name ? wayForPart.tag.name : '?') + '</a>';
+        data += ' [<a class="inline" onclick="removeMapObj(\'' + type + '\', \'' + id + '\', \'' + wayPartId + '\')">DELETE</a>]';
     } else {
         data = getTags(globalMapData[type][id]);
         if (canRemove(type, id)) {
@@ -210,6 +212,22 @@ function doRemoveNode(nodeId) {
     cleanupAndRerender();
 }
 
+function doRemoveWayPart(wayId, wayPartId) {
+    console.log(wayId, wayPartId);
+    // TODO - Fix this
+/*
+    var node = getNode(nodeId);
+    var nodeWay = node.wayObjects[0];
+    for (var i = 0; i < nodeWay.nd.length; i++) {
+        if (nodeWay.nd[i].$.ref === nodeId) {
+            nodeWay.nd.splice(i, 1);
+            break;
+        }
+    }
+    cleanupAndRerender();
+*/
+}
+
 function cleanupAndRerender() {
     cleanCrossRefs();
     for(var childIndex = scene.children.length - 1; childIndex >= 0; childIndex--) {
@@ -219,14 +237,18 @@ function cleanupAndRerender() {
     window.render();
 }
 
-function removeMapObj(type, id) {
+function removeMapObj(type, id, wayPartId) {
     var removeChild;
     for (var i = 0; i < scene.children.length; i++) {
         var child = scene.children[i];
         if (child.originType === type && child.originId === id) {
             removeChild = child;
             printInfo('Remove selected node?', [child], true, function(){
-                doRemoveNode(id);
+                if (type === 'node') {
+                    doRemoveNode(id);
+                } else if (type === 'waypart') {
+                    doRemoveWayPart(id, parseInt(wayPartId, 10));
+                }
             });
             break;
         }
@@ -339,6 +361,7 @@ function addWayPart(positionData, scene, way) {
     cube.rotation.z = positionData.r;
     cube.originType = 'waypart';
     cube.originId = way.$.id;
+    cube.originWPId = ++rollingUniqueId;
     scene.add(cube);
 
     // Add it to the globalMap, so we can access it
