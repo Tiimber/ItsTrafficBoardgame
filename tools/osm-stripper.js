@@ -86,7 +86,7 @@ function removeWaysTaggedAsFootway(osm) {
         var wayList = osm.way;
         for (var i = 0; i < wayList.length; i++) {
             var way = wayList[i];
-            if (hasTag(way, "highway", ["footway", "pedestrian", "living_street", "service", "cycleway", "path", "steps"])) {
+            if (hasTag(way, "highway", ["footway"/*, "pedestrian"*/, "living_street", "service", "cycleway", "path", "steps"])) {
                 wayList.splice(i, 1);
                 i--;
             }

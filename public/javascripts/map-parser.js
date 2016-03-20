@@ -1,5 +1,11 @@
 var globalMapData = {};
 var resolution = 1000;
+//var resolution = 4000; // Example - really blown up
+var wayHeightMapPct = 0.015;
+var highlighted = [];
+
+var wayPartColor = 0xffffff;
+var nodeColor = 0xccccff;
 
 function parseMapData() {
     var data = window.mapData;
@@ -10,16 +16,103 @@ function parseMapData() {
         minY: data.bounds[0].$.maxlat
     };
 
-    var nodes = {};
-    for (var nodeIndex = 0; nodeIndex < data.node.length; nodeIndex++) {
-        var node = data.node[nodeIndex];
-        nodes[node.$.id] = node;
+    var hashTypes = ['node', 'way', 'relation'];
+    for (var typeIndex = 0; typeIndex < hashTypes.length; typeIndex++) {
+        var type = hashTypes[typeIndex];
+        var list = {};
+        for (var itemIndex = 0; itemIndex < data[type].length; itemIndex++) {
+            var item = data[type][itemIndex];
+            list[item.$.id] = item;
+        }
+        globalMapData[type] = list;
     }
-    globalMapData.nodes = nodes;
-    globalMapData.ways = data.way;
-    globalMapData.relations = data.relation;
 
     initCanvas();
+    placeDataArea();
+}
+
+function placeDataArea() {
+    var dataArea = document.createElement('ul');
+    dataArea.id = 'dataArea';
+    document.body.appendChild(dataArea);
+}
+
+function deselectHighlights() {
+    for (var i = 0; i < highlighted.length; i++) {
+        var object = highlighted[i].object;
+        object.material.color.setHex(object.material.originalColor);
+    }
+}
+
+function getHighlightForColor(c) {
+    var r = (c & (0xff << 16)) >>> 16;
+    var g = (c & (0xff << 8)) >>> 8;
+    var b = (c & 0xff) / 0xff;
+    var rgb = 'rgb(' + [r,g,b].join(',') + ')';
+
+    var shadedColor = shadeRGBColor(rgb, -0.35);
+    var highlightColor = eval('0x' + componentToHex(shadedColor.r) + componentToHex(shadedColor.g) + componentToHex(shadedColor.b));
+    return highlightColor;
+}
+
+function componentToHex(c) {
+    var hex = c.toString(16);
+    return hex.length == 1 ? "0" + hex : hex;
+}
+
+function shadeRGBColor(color, percent) {
+    var f=color.split(","),t=percent<0?0:255,p=percent<0?percent*-1:percent,R=parseInt(f[0].slice(4)),G=parseInt(f[1]),B=parseInt(f[2]);
+    return {
+        r: Math.round((t-R)*p)+R,
+        g: Math.round((t-G)*p)+G,
+        b: Math.round((t-B)*p)+B
+    };
+}
+
+function selectHighlights() {
+    for (var i = 0; i < highlighted.length; i++) {
+        var object = highlighted[i].object;
+        object.material.originalColor = object.material.color.getHex();
+        object.material.color.setHex(getHighlightForColor(object.material.originalColor));
+    }
+}
+
+function printInfo(data) {
+    var dataArea = document.querySelector('#dataArea');
+    dataArea.innerHTML = '';
+
+    for (var i = 0; i < data.length; i++) {
+        var itemData = document.createElement('li');
+        var object = data[i].object;
+        itemData.innerHTML = 'Type: ' + object.originType + ', info: ' + getInfo(object.originType, object.originId);
+        dataArea.appendChild(itemData);
+    }
+
+    deselectHighlights();
+    highlighted = data;
+    selectHighlights();
+    window.render();
+}
+
+function getTags(item) {
+    var tagsData = '';
+    if (item.tag) {
+        for (var tagName in item.tag) {
+            tagsData += (tagsData.length ? ', ' : '') + tagName + ': ' + item.tag[tagName];
+        }
+    }
+    return tagsData;
+}
+
+function getInfo(type, id) {
+    var data;
+    if (type === 'waypart') {
+        var wayForPart = globalMapData.way[id];
+        data = 'Part of (' + wayForPart.tag.name + ')';
+    } else {
+        data = getTags(globalMapData[type][id]);
+    }
+    return data;
 }
 
 function initCanvas() {
@@ -27,6 +120,7 @@ function initCanvas() {
     var height = resolution;
 
     var calculateRatioX = 37.0;
+    //var calculateRatioX = 21.0; // To make it square (but stretch it)
     var calculateRatioY = 21.0;
     var widthPctOfHeight = (Math.abs(globalMapData.bounds.maxX - globalMapData.bounds.minX) / calculateRatioX) / (Math.abs(globalMapData.bounds.maxY - globalMapData.bounds.minY) / calculateRatioY);
     var canvas = document.querySelector('canvas');
@@ -37,6 +131,7 @@ function initCanvas() {
     }
 
     var scene = new THREE.Scene();
+    var raycaster = new THREE.Raycaster();
     //var camera = new THREE.PerspectiveCamera(globalMapData.bounds.maxX - globalMapData.bounds.minX, width / height, 0.1, 1000);
     var camera = new THREE.OrthographicCamera(globalMapData.bounds.minX, globalMapData.bounds.maxX, globalMapData.bounds.minY, globalMapData.bounds.maxY, 0.1, 1000);
     camera.position.z = 50;
@@ -45,42 +140,89 @@ function initCanvas() {
     renderer.setSize(width, height);
     document.body.appendChild(renderer.domElement);
 
+    // Attach mouse hover listener
+    var canvasX = renderer.domElement.offsetLeft;
+    var canvasY = renderer.domElement.offsetTop;
+    var canvasHeight = renderer.domElement.offsetHeight - 1;
+    var canvasWidth = renderer.domElement.offsetWidth;
+    renderer.domElement.addEventListener('mousedown', function (event) {
+        var relativePoint = new THREE.Vector2(
+            ((event.clientX - canvasX) / canvasWidth) * 2 - 1,
+            - ((event.clientY - canvasY) / canvasHeight) * 2 + 1
+        );
+        hover(scene, camera, raycaster, relativePoint);
+    }, false);
+
 
     addWays(scene);
 
-    //var render = function () {
-    //    requestAnimationFrame(render);
-    //
-    //    cube.rotation.x += 0.1;
-    //    cube.rotation.y += 0.1;
-    //
-    //    renderer.render(scene, camera);
-    //};
-    //
-    //render();
-    renderer.render(scene, camera);
+    window.render = function render () {
+//        requestAnimationFrame(window.render);
+
+        renderer.render(scene, camera);
+    };
+    render();
+}
+
+function hover(scene, camera, raycaster, pos) {
+    raycaster.setFromCamera(pos, camera);
+    var intersects = raycaster.intersectObjects(scene.children);
+    printInfo(intersects);
+}
+
+function addWayPart(positionData, scene, way) {
+    // Create the part of the road
+    var wayMaterial = new THREE.MeshBasicMaterial({color: wayPartColor});
+    var geometry = new THREE.BoxGeometry(positionData.l, wayHeightMapPct * resolution, 0.0); // Y should be way size
+    var cube = new THREE.Mesh(geometry, wayMaterial);
+    cube.position.x = positionData.x;
+    cube.position.y = positionData.y;
+    cube.rotation.z = positionData.r;
+    cube.originType = 'waypart';
+    cube.originId = way.$.id;
+    scene.add(cube);
+
+    // Add it to the globalMap, so we can access it
+    way.wayParts.push(cube);
+}
+
+var placedOutSphereIds = {};
+function addNodeObj(node, scene, way) {
+    if (!(node.$.id in placedOutSphereIds)) {
+        //// Create the node point
+        var nodeMaterial = new THREE.MeshBasicMaterial({color: nodeColor});
+        var geometry = new THREE.SphereGeometry(wayHeightMapPct * resolution / 2.0, 20, 20); // Y should be way size
+        var sphere = new THREE.Mesh(geometry, nodeMaterial);
+        sphere.position.x = node.$.lon;
+        sphere.position.y = node.$.lat;
+        sphere.originType = 'node';
+        sphere.originId = node.$.id;
+        scene.add(sphere);
+        way.nodeObjects.push(sphere);
+        placedOutSphereIds[node.$.id] = sphere;
+    } else {
+        way.nodeObjects.push(placedOutSphereIds[node.$.id]);
+    }
 }
 
 function addWays(scene) {
-    var whiteMaterial = new THREE.MeshBasicMaterial({color: 0xffffff});
 
-    var ways = globalMapData.ways;
-    for (var i = 0; i < ways.length; i++) {
-        var way = ways[i];
-        if (way.tag && way.tag.highway === 'residential') {
+    var ways = globalMapData.way;
+    for (var wayId in ways) {
+        var way = ways[wayId];
+        if (way.tag && (way.tag.highway === 'residential' || way.tag.highway === 'pedestrian')) {
+            way.wayParts = [];
+            way.nodeObjects = [];
+
             var previousNode = getNode(way.nd[0].$.ref);
-            for (var j = 1; j < way.nd.length; j++) {
-                var currentNode = getNode(way.nd[j].$.ref);
-                var positionData = getPositionData(previousNode.$.lon, previousNode.$.lat, currentNode.$.lon, currentNode.$.lat);
+            addNodeObj(previousNode, scene, way);
 
-                // Create the part of the road
-                var geometry = new THREE.BoxGeometry(positionData.l, 10, 0.0); // Y should be way size
-                var cube = new THREE.Mesh(geometry, whiteMaterial);
-                cube.position.x = positionData.x;
-                cube.position.y = positionData.y;
-                cube.rotation.z = positionData.r;
-                scene.add(cube);
+            for (var i = 1; i < way.nd.length; i++) {
+                var currentNode = getNode(way.nd[i].$.ref);
+                addNodeObj(currentNode, scene, way);
 
+                var wayPositionData = getPositionData(previousNode.$.lon, previousNode.$.lat, currentNode.$.lon, currentNode.$.lat);
+                addWayPart(wayPositionData, scene, way);
                 previousNode = currentNode;
             }
         }
@@ -88,7 +230,7 @@ function addWays(scene) {
 }
 
 function getNode(id) {
-    return globalMapData.nodes[id];
+    return globalMapData.node[id];
 }
 
 function getPositionData(x1, y1, x2, y2) {
