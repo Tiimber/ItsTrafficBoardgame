@@ -1,4 +1,6 @@
 var globalMapData = {};
+var placedOutSphereIds = {};
+var scene;
 var resolution = 1000;
 //var resolution = 4000; // Example - really blown up
 var wayHeightMapPct = 0.015;
@@ -32,14 +34,14 @@ function parseMapData() {
 }
 
 function placeDataArea() {
-    var dataArea = document.createElement('ul');
+    var dataArea = document.createElement('div');
     dataArea.id = 'dataArea';
     document.body.appendChild(dataArea);
 }
 
 function deselectHighlights() {
     for (var i = 0; i < highlighted.length; i++) {
-        var object = highlighted[i].object;
+        var object = highlighted[i].object || highlighted[i];
         object.material.color.setHex(object.material.originalColor);
     }
 }
@@ -71,20 +73,25 @@ function shadeRGBColor(color, percent) {
 
 function selectHighlights() {
     for (var i = 0; i < highlighted.length; i++) {
-        var object = highlighted[i].object;
+        var object = highlighted[i].object || highlighted[i];
         object.material.originalColor = object.material.color.getHex();
         object.material.color.setHex(getHighlightForColor(object.material.originalColor));
     }
 }
 
-function printInfo(data) {
+function printInfo(title, data) {
     var dataArea = document.querySelector('#dataArea');
     dataArea.innerHTML = '';
 
+    var titleObj = document.createElement('div');
+    titleObj.innerHTML = title;
+    dataArea.appendChild(titleObj);
+
     for (var i = 0; i < data.length; i++) {
-        var itemData = document.createElement('li');
-        var object = data[i].object;
-        itemData.innerHTML = 'Type: ' + object.originType + ', info: ' + getInfo(object.originType, object.originId);
+        var itemData = document.createElement('div');
+        itemData.style.marginLeft = '1em';
+        var object = data[i].object || data[i];
+        itemData.innerHTML = '- Type: ' + object.originType + ', info: ' + getInfo(object.originType, object.originId);
         dataArea.appendChild(itemData);
     }
 
@@ -101,18 +108,76 @@ function getTags(item) {
             tagsData += (tagsData.length ? ', ' : '') + tagName + ': ' + item.tag[tagName];
         }
     }
+    if (!tagsData) {
+        tagsData = '<span style="color: gray">-</span>';
+    }
     return tagsData;
+}
+
+function canRemove(type, id) {
+    if (type === 'node') {
+        // Can't remove nodes in intersection, make sure it's only referenced in a single way
+        var node = getNode(id);
+        return !node.wayObjects || node.wayObjects.length === 1;
+    }
+    return false;
 }
 
 function getInfo(type, id) {
     var data;
     if (type === 'waypart') {
         var wayForPart = globalMapData.way[id];
-        data = 'Part of (' + wayForPart.tag.name + ')';
+        data = 'Part of <a onclick="highlightWayAndNodes(\'' + id + '\');">' + (wayForPart.tag.name ? wayForPart.tag.name : '?') + '</a>';
     } else {
         data = getTags(globalMapData[type][id]);
+        if (canRemove(type, id)) {
+            data += ' [<a onclick="removeMapObj(\'' + type + '\', \'' + id + '\')">DELETE</a>]';
+        }
     }
     return data;
+}
+
+function cleanCrossRefs() {
+    for (var wayId in globalMapData.way) {
+        delete globalMapData.way[wayId].nodeObjects;
+        delete globalMapData.way[wayId].wayParts;
+    }
+    for (var nodeId in globalMapData.node) {
+        delete globalMapData.node[nodeId].wayObjects;
+    }
+    placedOutSphereIds = {};
+}
+
+function doRemoveNode(nodeId) {
+    var node = getNode(nodeId);
+    var nodeWay = node.wayObjects[0];
+    for (var i = 0; i < nodeWay.nd.length; i++) {
+        if (nodeWay.nd[i].$.ref === nodeId) {
+            nodeWay.nd.splice(i, 1);
+            break;
+        }
+    }
+    cleanCrossRefs();
+    for(var childIndex = scene.children.length - 1; childIndex >= 0; childIndex--) {
+        scene.remove(scene.children[childIndex]);
+    }
+    addWays();
+    window.render();
+}
+
+function removeMapObj(type, id) {
+    var removeChild;
+    for (var i = 0; i < scene.children.length; i++) {
+        var child = scene.children[i];
+        if (child.originType === type && child.originId === id) {
+            removeChild = child;
+            printInfo('Removal request:', [child]);
+            break;
+        }
+    }
+    if (confirm('Are you sure you want to remove this node?')) {
+        doRemoveNode(id);
+    }
 }
 
 function initCanvas() {
@@ -130,7 +195,7 @@ function initCanvas() {
         width = resolution / widthPctOfHeight;
     }
 
-    var scene = new THREE.Scene();
+    scene = new THREE.Scene();
     var raycaster = new THREE.Raycaster();
     //var camera = new THREE.PerspectiveCamera(globalMapData.bounds.maxX - globalMapData.bounds.minX, width / height, 0.1, 1000);
     var camera = new THREE.OrthographicCamera(globalMapData.bounds.minX, globalMapData.bounds.maxX, globalMapData.bounds.minY, globalMapData.bounds.maxY, 0.1, 1000);
@@ -154,7 +219,7 @@ function initCanvas() {
     }, false);
 
 
-    addWays(scene);
+    addWays();
 
     window.render = function render () {
 //        requestAnimationFrame(window.render);
@@ -167,7 +232,15 @@ function initCanvas() {
 function hover(scene, camera, raycaster, pos) {
     raycaster.setFromCamera(pos, camera);
     var intersects = raycaster.intersectObjects(scene.children);
-    printInfo(intersects);
+    var title = 'Items for clicked position "' + pos.x.toFixed(3) + ', ' + pos.y.toFixed(3) + '":';
+    printInfo(title, intersects);
+}
+
+function highlightWayAndNodes(wayId) {
+    var way = globalMapData.way[wayId];
+    var wayMembers = [].concat(way.wayParts, way.nodeObjects);
+    var title = 'Items for way "' + (way.tag && way.tag.name || '?') + '":';
+    printInfo(title, wayMembers);
 }
 
 function addWayPart(positionData, scene, way) {
@@ -186,8 +259,11 @@ function addWayPart(positionData, scene, way) {
     way.wayParts.push(cube);
 }
 
-var placedOutSphereIds = {};
 function addNodeObj(node, scene, way) {
+    if (!node.wayObjects) {
+        node.wayObjects = [];
+    }
+
     if (!(node.$.id in placedOutSphereIds)) {
         //// Create the node point
         var nodeMaterial = new THREE.MeshBasicMaterial({color: nodeColor});
@@ -199,14 +275,15 @@ function addNodeObj(node, scene, way) {
         sphere.originId = node.$.id;
         scene.add(sphere);
         way.nodeObjects.push(sphere);
+        node.wayObjects.push(way);
         placedOutSphereIds[node.$.id] = sphere;
     } else {
         way.nodeObjects.push(placedOutSphereIds[node.$.id]);
+        node.wayObjects.push(way);
     }
 }
 
-function addWays(scene) {
-
+function addWays() {
     var ways = globalMapData.way;
     for (var wayId in ways) {
         var way = ways[wayId];
