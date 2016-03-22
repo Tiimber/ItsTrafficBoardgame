@@ -213,19 +213,50 @@ function doRemoveNode(nodeId) {
 }
 
 function doRemoveWayPart(wayId, wayPartId) {
-    console.log(wayId, wayPartId);
-    // TODO - Fix this
-/*
-    var node = getNode(nodeId);
-    var nodeWay = node.wayObjects[0];
-    for (var i = 0; i < nodeWay.nd.length; i++) {
-        if (nodeWay.nd[i].$.ref === nodeId) {
-            nodeWay.nd.splice(i, 1);
+    var way = globalMapData.way[wayId];
+    var numberOfWayParts = way.wayParts.length;
+    var wayPartIndex;
+    for (wayPartIndex = 0; wayPartIndex < numberOfWayParts; wayPartIndex++) {
+        if (way.wayParts[wayPartIndex].originWPId === wayPartId) {
             break;
         }
     }
+
+    var isFirstPart = wayPartIndex === 0;
+    var isLastPart = wayPartIndex === numberOfWayParts - 1;
+
+    // If only wayPart, remove way
+    if (isFirstPart && isLastPart) {
+        delete globalMapData.way[wayId];
+    } else if (isFirstPart) {
+        // If first part, only remove the first node
+        way.nd.splice(0, 1);
+    } else if (isLastPart) {
+        way.nd.splice(way.nd.length - 1, 1);
+    } else {
+        // We need to split this way into two ways
+        var newNodes = way.nd.splice(wayPartIndex + 1);
+
+        var newId = makeid(16);
+        globalMapData.way[newId] = {
+            $: {id: newId},
+            tag: JSON.parse(JSON.stringify(way.tag)),
+            nd: newNodes
+        };
+    }
+
     cleanupAndRerender();
-*/
+}
+
+function makeid(length) {
+    var text = "";
+    var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+    for (var i = 0; i < length; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+
+    return text;
 }
 
 function cleanupAndRerender() {
@@ -241,7 +272,7 @@ function removeMapObj(type, id, wayPartId) {
     var removeChild;
     for (var i = 0; i < scene.children.length; i++) {
         var child = scene.children[i];
-        if (child.originType === type && child.originId === id) {
+        if (child.originType === type && child.originId === id && (!wayPartId || child.originWPId === parseInt(wayPartId, 10))) {
             removeChild = child;
             printInfo('Remove selected node?', [child], true, function(){
                 if (type === 'node') {
