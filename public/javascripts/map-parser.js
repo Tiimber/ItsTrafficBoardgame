@@ -32,6 +32,8 @@ function parseMapData() {
     }
 
     initCanvas();
+    addWays();
+    window.render();
     placeDataArea();
 }
 
@@ -357,15 +359,11 @@ function initCanvas() {
         mouseOn(scene, camera, raycaster, relativePoint);
     }, false);
 
-
-    addWays();
-
     window.render = function render () {
 //        requestAnimationFrame(window.render);
 
         renderer.render(scene, camera);
     };
-    render();
 }
 
 function mouseOn(scene, camera, raycaster, pos) {
@@ -431,6 +429,13 @@ function addWays() {
             way.wayParts = [];
             way.nodeObjects = [];
 
+            removeOutsideNodes(way.nd);
+            // All nodes were outside, remove this way
+            if (!way.nd.length) {
+                delete globalMapData.way[wayId];
+                continue;
+            }
+
             var previousNode = getNode(way.nd[0].$.ref);
             addNodeObj(previousNode, scene, way);
 
@@ -443,6 +448,41 @@ function addWays() {
                 previousNode = currentNode;
             }
         }
+    }
+}
+
+function isNodeOutside(lon, lat) {
+    return lon < globalMapData.bounds.minX || lon > globalMapData.bounds.maxX || lat > globalMapData.bounds.minY || lat < globalMapData.bounds.maxY;
+}
+
+function removeOutsideNodes(nodes) {
+    var i;
+    var node;
+
+    // We only want to keep one node outside the map in the beginning of the way
+    var numberBeginningNodesOutside = 0;
+    for (i = 0; i < nodes.length; i++, numberBeginningNodesOutside++) {
+        node = getNode(nodes[i].$.ref).$;
+        if (!isNodeOutside(node.lon, node.lat)) {
+            break;
+        }
+    }
+
+    if (numberBeginningNodesOutside > 1) {
+        nodes.splice(0, numberBeginningNodesOutside - 1);
+    }
+
+    // We only want to keep one node outside the map in the end of the way
+    var numberEndNodesOutside = 0;
+    for (i = nodes.length - 1; i >= 0; i--, numberEndNodesOutside++) {
+        node = getNode(nodes[i].$.ref).$;
+        if (!isNodeOutside(node.lon, node.lat)) {
+            break;
+        }
+    }
+
+    if (numberEndNodesOutside > 1) {
+        nodes.splice(nodes.length - (numberEndNodesOutside - 1));
     }
 }
 
