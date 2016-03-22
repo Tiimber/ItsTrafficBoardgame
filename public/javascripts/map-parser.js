@@ -179,6 +179,7 @@ function getInfo(type, id, wayPartId) {
         var wayForPart = globalMapData.way[id];
         data = 'Part of <a class="inline" onclick="highlightWayAndNodes(\'' + id + '\');">' + (wayForPart.tag.name ? wayForPart.tag.name : '?') + '</a>';
         data += ' [<a class="inline" onclick="removeMapObj(\'' + type + '\', \'' + id + '\', \'' + wayPartId + '\')">DELETE</a>]';
+        data += ' [<a class="inline" onclick="splitWayPart(\'' + type + '\', \'' + id + '\', \'' + wayPartId + '\')">SPLIT UP</a>]';
     } else {
         data = getTags(globalMapData[type][id]);
         if (canRemove(type, id)) {
@@ -211,6 +212,35 @@ function doRemoveNode(nodeId) {
             break;
         }
     }
+    cleanupAndRerender();
+}
+
+function doSplitWayPart(wayId, wayPartId) {
+    var way = globalMapData.way[wayId];
+    var wayPartIndex;
+    for (wayPartIndex = 0; wayPartIndex < way.wayParts.length; wayPartIndex++) {
+        if (way.wayParts[wayPartIndex].originWPId === wayPartId) {
+            break;
+        }
+    }
+
+    var prevNode = getNode(way.nd[wayPartIndex].$.ref);
+    var nextNode = getNode(way.nd[wayPartIndex + 1].$.ref);
+
+    var newNodeId = makeid(16);
+    var newMidNode = {$: {
+            id: newNodeId,
+            lon: prevNode.$.lon + Math.round((nextNode.$.lon - prevNode.$.lon) / 2),
+            lat: prevNode.$.lat + Math.round((nextNode.$.lat - prevNode.$.lat) / 2)
+    }};
+    if (prevNode.tag && prevNode.tag.highway) {
+        newMidNode.tag = {highway: prevNode.tag.highway};
+    }
+
+    globalMapData.node[newNodeId] = newMidNode;
+
+    way.nd.splice(wayPartIndex + 1, 0, {$: {ref: newNodeId}});
+
     cleanupAndRerender();
 }
 
@@ -250,9 +280,9 @@ function doRemoveWayPart(wayId, wayPartId) {
     cleanupAndRerender();
 }
 
-function makeid(length) {
+function makeid(length, numbersOnly) {
     var text = "";
-    var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    var possible = (numbersOnly ? "0123456789" : "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789");
 
     for (var i = 0; i < length; i++) {
         text += possible.charAt(Math.floor(Math.random() * possible.length));
@@ -268,6 +298,20 @@ function cleanupAndRerender() {
     }
     addWays();
     window.render();
+}
+
+function splitWayPart(type, id, wayPartId) {
+    var splitChild;
+    for (var i = 0; i < scene.children.length; i++) {
+        var child = scene.children[i];
+        if (child.originType === type && child.originId === id && child.originWPId === parseInt(wayPartId, 10)) {
+            splitChild = child;
+            printInfo('Split part of way to two parts?', [child], true, function(){
+                doSplitWayPart(id, parseInt(wayPartId, 10));
+            });
+            break;
+        }
+    }
 }
 
 function removeMapObj(type, id, wayPartId) {
