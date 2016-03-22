@@ -1,3 +1,9 @@
+// TODO
+// - Make higher resolution not blow up wayHeight too much
+// - Edit node tags
+// - Edit way tags
+// - Sanity checks such as not possible to move node into node in same way, not possible to create a way between points crossing others or nodes already within same way
+
 var globalMapData = {};
 var placedOutSphereIds = {};
 var scene;
@@ -99,6 +105,19 @@ function printInfo(title, data, cancelBtn, okCb) {
                     };
                 }
             }
+        } else if (nextClick.type === 'createWay') {
+            for (i = 0; i < data.length; i++) {
+                var createTo = data[i].object || data[i];
+                if (createTo.originType === 'node' && createTo.originId !== nextClick.obj) {
+                    title = 'Confirm creating a new way between the two nodes?';
+                    cancelBtn = true;
+                    data = [].concat(highlighted);
+                    data.push(createTo);
+                    okCb = function () {
+                        createWayBetweenNodes(data)
+                    };
+                }
+            }
         }
     }
 
@@ -187,6 +206,10 @@ function getInfo(type, id, wayPartId) {
         }
         if (canMerge(type, id)) {
             data += ' [<a class="inline" onclick="mergeMapObj(\'' + type + '\', \'' + id + '\')">MOVE INTO OTHER POINT</a>]';
+        }
+
+        if (type === 'node') {
+            data += ' [<a class="inline" onclick="createWayFrom(\'' + type + '\', \'' + id + '\')">CREATE WAY TO ANOTHER NODE</a>]';
         }
     }
     return data;
@@ -332,6 +355,21 @@ function removeMapObj(type, id, wayPartId) {
     }
 }
 
+function createWayBetweenNodes(data) {
+    var nodeFrom = getNode((data[0].object || data[0]).originId);
+    var nodeTo = getNode((data[1].object || data[1]).originId);
+
+    var newWayId = makeid(16);
+    var way = {
+        $: {id: newWayId},
+        nd: [{$: {ref: nodeFrom.$.id}}, {$: {ref: nodeTo.$.id}}],
+        tag: {highway: 'residential', name: 'User created way ' + newWayId}
+    }
+    globalMapData.way[newWayId] = way;
+
+    cleanupAndRerender();
+}
+
 function mergeNodes(data) {
     var nodeToReplace = (data[0].object || data[0]).originId;
     var nodeToReplaceWith = (data[1].object || data[1]).originId;
@@ -362,7 +400,20 @@ function mergeMapObj(type, id) {
             break;
         }
     }
-    nextClick = {type: 'move', obj: child};
+    nextClick = {type: 'move', obj: moveChild};
+}
+
+function createWayFrom(type, id) {
+    var createFrom;
+    for (var i = 0; i < scene.children.length; i++) {
+        var child = scene.children[i];
+        if (child.originType === type && child.originId === id) {
+            createFrom = child;
+            printInfo('Create way from node to ... (click on the other node):', [child], true);
+            break;
+        }
+    }
+    nextClick = {type: 'createWay', obj: createFrom};
 }
 
 function initCanvas() {
