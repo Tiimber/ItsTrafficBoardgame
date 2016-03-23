@@ -2,13 +2,22 @@
 // - Edit node tags
 // - Edit way tags
 // - Sanity checks such as not possible to move node into node in same way, not possible to create a way between points crossing others or nodes already within same way
+// - Add node to start/end of current ways
+// - Undo
+// - More colors, one for each highlighted node, with color in info panel
+
+// Code for getting image data (and adding as an image to the page)
+//var canvas = document.querySelector('canvas');
+//var image = document.createElement('img');
+//image.src = canvas.toDataURL("image/png");
+//document.body.appendChild(image)
 
 var globalMapData = {};
 var placedOutSphereIds = {};
 var scene;
 var resolution = 1000;
 //var resolution = 4000; // Example - really blown up
-var wayHeightMap = 15;
+var wayHeightMap = 15; // Measure is in lon/lat (multiplied by 100 000)
 var highlighted = [];
 var nextClick = null;
 var rollingUniqueId = 0;
@@ -88,6 +97,23 @@ function selectHighlights() {
     }
 }
 
+function getTypeHTML(type) {
+    switch (type) {
+        case 'waypart':
+            return '<span class="fa fa-road type-icon"></span>';
+        case 'node':
+            return '<span class="fa fa-dot-circle-o type-icon"></span>';
+        default:
+            return '<span class="fa fa-question type-icon"></span>';
+
+    }
+}
+
+function updatePrint() {
+    printInfo.apply(this, lastPrintInfo);
+}
+
+var lastPrintInfo = [];
 function printInfo(title, data, cancelBtn, okCb) {
     var i;
     if (nextClick) {
@@ -120,6 +146,9 @@ function printInfo(title, data, cancelBtn, okCb) {
         }
     }
 
+    // Save last info
+    lastPrintInfo = [].slice.call(arguments, 0);
+
     nextClick = null;
     var dataArea = document.querySelector('#dataArea');
     dataArea.innerHTML = '';
@@ -132,7 +161,7 @@ function printInfo(title, data, cancelBtn, okCb) {
         var itemData = document.createElement('div');
         itemData.style.marginLeft = '1em';
         var object = data[i].object || data[i];
-        itemData.innerHTML = '- Type: ' + object.originType + ', info: ' + getInfo(object.originType, object.originId, object.originWPId);
+        itemData.innerHTML = getTypeHTML(object.originType) + ' ' + getInfo(object.originType, object.originId, object.originWPId);
         dataArea.appendChild(itemData);
     }
 
@@ -164,11 +193,8 @@ function getTags(item) {
     var tagsData = '';
     if (item.tag) {
         for (var tagName in item.tag) {
-            tagsData += (tagsData.length ? ', ' : '') + tagName + ': ' + item.tag[tagName];
+            tagsData += '<span class="fa fa-tag"></span> ' + tagName + ': ' + item.tag[tagName];
         }
-    }
-    if (!tagsData) {
-        tagsData = '<span style="color: gray">-</span>';
     }
     return tagsData;
 }
@@ -191,24 +217,39 @@ function canMerge(type, id) {
     return false;
 }
 
+function editWayName(id, oldName) {
+    var way = globalMapData.way[id];
+    bootbox.prompt({
+        title: 'Enter new name for this way:',
+        value: oldName,
+        callback: function(newName) {
+            if (newName != null) {
+                way.tag.name = newName;
+                updatePrint();
+            }
+        }
+    });
+}
+
 function getInfo(type, id, wayPartId) {
     var data;
     if (type === 'waypart') {
         var wayForPart = globalMapData.way[id];
-        data = 'Part of <a class="inline" onclick="highlightWayAndNodes(\'' + id + '\');">' + (wayForPart.tag.name ? wayForPart.tag.name : '?') + '</a>';
-        data += ' [<a class="inline" onclick="removeMapObj(\'' + type + '\', \'' + id + '\', \'' + wayPartId + '\')">DELETE</a>]';
-        data += ' [<a class="inline" onclick="splitWayPart(\'' + type + '\', \'' + id + '\', \'' + wayPartId + '\')">SPLIT UP</a>]';
+        data = 'Part of <span class="underline">' + (wayForPart.tag.name ? wayForPart.tag.name : '?') + '</span> <a class="inline fa fa-eye" onclick="highlightWayAndNodes(\'' + id + '\');"></a>'; // Click to highlight all on this way
+        data += ' <a class="inline fa fa-pencil" onclick="editWayName(\'' + id + '\', \'' + (wayForPart.tag.name || '') + '\')"></a>'; // Edit this name
+        data += ' [<a class="inline" onclick="removeMapObj(\'' + type + '\', \'' + id + '\', \'' + wayPartId + '\')">DELETE</a>]'; // Delete this way part
+        data += ' [<a class="inline" onclick="splitWayPart(\'' + type + '\', \'' + id + '\', \'' + wayPartId + '\')">SPLIT UP</a>]'; // Split this way part into two parts
     } else {
         data = getTags(globalMapData[type][id]);
         if (canRemove(type, id)) {
-            data += ' [<a class="inline" onclick="removeMapObj(\'' + type + '\', \'' + id + '\')">DELETE</a>]';
+            data += ' [<a class="inline" onclick="removeMapObj(\'' + type + '\', \'' + id + '\')">DELETE</a>]'; // If possible - remove this node (or relation)
         }
         if (canMerge(type, id)) {
-            data += ' [<a class="inline" onclick="mergeMapObj(\'' + type + '\', \'' + id + '\')">MOVE INTO OTHER POINT</a>]';
+            data += ' [<a class="inline" onclick="mergeMapObj(\'' + type + '\', \'' + id + '\')">MOVE INTO OTHER POINT</a>]'; // If possible - merge this node into another one
         }
 
         if (type === 'node') {
-            data += ' [<a class="inline" onclick="createWayFrom(\'' + type + '\', \'' + id + '\')">CREATE WAY TO ANOTHER NODE</a>]';
+            data += ' [<a class="inline" onclick="createWayFrom(\'' + type + '\', \'' + id + '\')">CREATE WAY TO ANOTHER NODE</a>]'; // Create a new way from this node to another one
         }
     }
     return data;
@@ -436,7 +477,7 @@ function initCanvas() {
     var camera = new THREE.OrthographicCamera(globalMapData.bounds.minX, globalMapData.bounds.maxX, globalMapData.bounds.minY, globalMapData.bounds.maxY, 0.1, 1000);
     camera.position.z = 50;
 
-    var renderer = new THREE.WebGLRenderer();
+    var renderer = new THREE.WebGLRenderer({preserveDrawingBuffer: true});
     renderer.setSize(width, height);
     document.body.appendChild(renderer.domElement);
 

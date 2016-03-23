@@ -22,3 +22,11 @@ a.negative {
   font-weight: bold;
   color: #aaaaaa;
 }
+
+.underline {
+  text-decoration: underline;
+}
+
+.type-icon {
+  margin-right: 1em;
+}
