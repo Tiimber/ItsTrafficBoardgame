@@ -1,5 +1,4 @@
 // TODO
-// - Make higher resolution not blow up wayHeight too much
 // - Edit node tags
 // - Edit way tags
 // - Sanity checks such as not possible to move node into node in same way, not possible to create a way between points crossing others or nodes already within same way
@@ -9,7 +8,7 @@ var placedOutSphereIds = {};
 var scene;
 var resolution = 1000;
 //var resolution = 4000; // Example - really blown up
-var wayHeightMapPct = 0.015;
+var wayHeightMap = 15;
 var highlighted = [];
 var nextClick = null;
 var rollingUniqueId = 0;
@@ -448,8 +447,8 @@ function initCanvas() {
     var canvasWidth = renderer.domElement.offsetWidth;
     renderer.domElement.addEventListener('mousedown', function (event) {
         var relativePoint = new THREE.Vector2(
-            ((event.clientX - canvasX) / canvasWidth) * 2 - 1,
-            - ((event.clientY - canvasY) / canvasHeight) * 2 + 1
+            ((event.pageX - canvasX) / canvasWidth) * 2 - 1,
+            - ((event.pageY - canvasY) / canvasHeight) * 2 + 1
         );
         mouseOn(scene, camera, raycaster, relativePoint);
     }, false);
@@ -478,7 +477,7 @@ function highlightWayAndNodes(wayId) {
 function addWayPart(positionData, scene, way) {
     // Create the part of the road
     var wayMaterial = new THREE.MeshBasicMaterial({color: wayPartColor});
-    var geometry = new THREE.BoxGeometry(positionData.l, wayHeightMapPct * resolution, 0.0); // Y should be way size
+    var geometry = new THREE.BoxGeometry(positionData.l, wayHeightMap, 0.0); // Y should be way size
     var cube = new THREE.Mesh(geometry, wayMaterial);
     cube.position.x = positionData.x;
     cube.position.y = positionData.y;
@@ -500,7 +499,7 @@ function addNodeObj(node, scene, way) {
     if (!(node.$.id in placedOutSphereIds)) {
         //// Create the node point
         var nodeMaterial = new THREE.MeshBasicMaterial({color: nodeColor});
-        var geometry = new THREE.SphereGeometry(wayHeightMapPct * resolution / 2.0, 20, 20); // Y should be way size
+        var geometry = new THREE.SphereGeometry(wayHeightMap / 2.0, 20, 20); // Y should be way size
         var sphere = new THREE.Mesh(geometry, nodeMaterial);
         sphere.position.x = node.$.lon;
         sphere.position.y = node.$.lat;
