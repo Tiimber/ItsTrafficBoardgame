@@ -3,7 +3,6 @@
 // - Edit way tags
 // - Sanity checks such as not possible to move node into node in same way, not possible to create a way between points crossing others or nodes already within same way
 // - Add node to start/end of current ways
-// - Undo
 
 // Code for getting image data (and adding as an image to the page)
 //var canvas = document.querySelector('canvas');
@@ -88,7 +87,7 @@ function getRgbString(c) {
     var r = (c & (0xff << 16)) >>> 16;
     var g = (c & (0xff << 8)) >>> 8;
     var b = (c & 0xff);
-    return 'rgb(' + [r,g,b].join(',') + ')';
+    return 'rgb(' + [r, g, b].join(',') + ')';
 }
 
 function getHighlightColor(object, colorCounters) {
@@ -136,7 +135,8 @@ function printInfo(title, data, cancelBtn, okCb) {
                     cancelBtn = true;
                     data = [].concat(highlighted);
                     data.push(mergeWith);
-                    okCb = function() {
+                    okCb = function () {
+                        saveBackupData();
                         mergeNodes(data)
                     };
                 }
@@ -150,6 +150,7 @@ function printInfo(title, data, cancelBtn, okCb) {
                     data = [].concat(highlighted);
                     data.push(createTo);
                     okCb = function () {
+                        saveBackupData();
                         createWayBetweenNodes(data)
                     };
                 }
@@ -190,7 +191,7 @@ function printInfo(title, data, cancelBtn, okCb) {
         var cancelBtnObj = document.createElement('a');
         cancelBtnObj.className = 'negative';
         cancelBtnObj.innerHTML = 'Cancel';
-        cancelBtnObj.onclick = function(){
+        cancelBtnObj.onclick = function () {
             printInfo('', []);
         };
         dataArea.appendChild(cancelBtnObj);
@@ -225,7 +226,7 @@ function canMerge(type, id) {
     if (type === 'node') {
         // Can merge node only if it is an endpoint of one way
         var node = getNode(id);
-        return node.wayObjects && node.wayObjects.length === 1 && (node.wayObjects[0].nd[0].$.ref === id || node.wayObjects[0].nd[node.wayObjects[0].nd.length-1].$.ref === id);
+        return node.wayObjects && node.wayObjects.length === 1 && (node.wayObjects[0].nd[0].$.ref === id || node.wayObjects[0].nd[node.wayObjects[0].nd.length - 1].$.ref === id);
     }
     return false;
 }
@@ -235,7 +236,8 @@ function editWayName(id, oldName) {
     bootbox.prompt({
         title: 'Enter new name for this way:',
         value: oldName,
-        callback: function(newName) {
+        callback: function (newName) {
+            saveBackupData();
             if (newName != null) {
                 way.tag.name = newName;
                 updatePrint();
@@ -304,11 +306,13 @@ function doSplitWayPart(wayId, wayPartId) {
     var nextNode = getNode(way.nd[wayPartIndex + 1].$.ref);
 
     var newNodeId = makeid(16);
-    var newMidNode = {$: {
+    var newMidNode = {
+        $: {
             id: newNodeId,
             lon: prevNode.$.lon + Math.round((nextNode.$.lon - prevNode.$.lon) / 2),
             lat: prevNode.$.lat + Math.round((nextNode.$.lat - prevNode.$.lat) / 2)
-    }};
+        }
+    };
     if (prevNode.tag && prevNode.tag.highway) {
         newMidNode.tag = {highway: prevNode.tag.highway};
     }
@@ -367,11 +371,64 @@ function makeid(length, numbersOnly) {
     return text;
 }
 
+var backupData = [];
+var currentKeptBackupData = null;
+var forwardData = [];
+function saveBackupData() {
+    backupData.push(currentKeptBackupData);
+    forwardData = [];
+    setUndoRedoState();
+}
+
+function undo() {
+    if (backupData.length) {
+        cleanCrossRefs();
+        for (var childIndex = scene.children.length - 1; childIndex >= 0; childIndex--) {
+            scene.remove(scene.children[childIndex]);
+        }
+
+        forwardData.push(JSON.parse(JSON.stringify(globalMapData)));
+        globalMapData = backupData.splice(backupData.length - 1, 1)[0];
+
+        printInfo('', []);
+        addWays();
+        window.render();
+
+        setUndoRedoState();
+    }
+}
+
+function redo() {
+    if (forwardData.length) {
+        cleanCrossRefs();
+        for (var childIndex = scene.children.length - 1; childIndex >= 0; childIndex--) {
+            scene.remove(scene.children[childIndex]);
+        }
+
+        backupData.push(JSON.parse(JSON.stringify(globalMapData)));
+        globalMapData = forwardData.splice(forwardData.length - 1, 1)[0];
+
+        printInfo('', []);
+        addWays();
+        window.render();
+
+        setUndoRedoState();
+    }
+}
+
+function setUndoRedoState() {
+    var canUndo = backupData.length;
+    var canRedo = forwardData.length;
+    document.querySelector('.top .undo').dataset['disabled'] = !canUndo;
+    document.querySelector('.top .redo').dataset['disabled'] = !canRedo;
+}
+
 function cleanupAndRerender() {
     cleanCrossRefs();
-    for(var childIndex = scene.children.length - 1; childIndex >= 0; childIndex--) {
+    for (var childIndex = scene.children.length - 1; childIndex >= 0; childIndex--) {
         scene.remove(scene.children[childIndex]);
     }
+    printInfo('', []);
     addWays();
     window.render();
 }
@@ -382,7 +439,8 @@ function splitWayPart(type, id, wayPartId) {
         var child = scene.children[i];
         if (child.originType === type && child.originId === id && child.originWPId === parseInt(wayPartId, 10)) {
             splitChild = child;
-            printInfo('Split part of way to two parts?', [child], true, function(){
+            printInfo('Split part of way to two parts?', [child], true, function () {
+                saveBackupData();
                 doSplitWayPart(id, parseInt(wayPartId, 10));
             });
             break;
@@ -396,7 +454,8 @@ function removeMapObj(type, id, wayPartId) {
         var child = scene.children[i];
         if (child.originType === type && child.originId === id && (!wayPartId || child.originWPId === parseInt(wayPartId, 10))) {
             removeChild = child;
-            printInfo('Remove selected node?', [child], true, function(){
+            printInfo('Remove selected node?', [child], true, function () {
+                saveBackupData();
                 if (type === 'node') {
                     doRemoveNode(id);
                 } else if (type === 'waypart') {
@@ -417,7 +476,7 @@ function createWayBetweenNodes(data) {
         $: {id: newWayId},
         nd: [{$: {ref: nodeFrom.$.id}}, {$: {ref: nodeTo.$.id}}],
         tag: {highway: 'residential', name: 'User created way ' + newWayId}
-    }
+    };
     globalMapData.way[newWayId] = way;
 
     cleanupAndRerender();
@@ -502,13 +561,13 @@ function initCanvas() {
     renderer.domElement.addEventListener('mousedown', function (event) {
         var relativePoint = new THREE.Vector2(
             ((event.pageX - canvasX) / canvasWidth) * 2 - 1,
-            - ((event.pageY - canvasY) / canvasHeight) * 2 + 1
+            -((event.pageY - canvasY) / canvasHeight) * 2 + 1
         );
         mouseOn(scene, camera, raycaster, relativePoint);
     }, false);
 
-    window.render = function render () {
-//        requestAnimationFrame(window.render);
+    window.render = function render() {
+        //        requestAnimationFrame(window.render);
 
         renderer.render(scene, camera);
     };
@@ -570,6 +629,8 @@ function addNodeObj(node, scene, way) {
 }
 
 function addWays() {
+    currentKeptBackupData = JSON.parse(JSON.stringify(globalMapData));
+
     var ways = globalMapData.way;
     for (var wayId in ways) {
         var way = ways[wayId];

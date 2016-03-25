@@ -1,36 +1,55 @@
 body {
-  /*padding: 50px;*/
-  /*font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;*/
+    padding: 1em;
 }
 
 a {
-  display: block;
-  margin: 0.5em 0;
-  color: #00b7ff;
+    display: block;
+    margin: 0.5em 0;
+    color: #00b7ff;
 }
 
 a.inline {
-  display: inline-block;
+    display: inline-block;
 }
 
 a.positive {
-  font-weight: bold;
-  color: #349723;
+    font-weight: bold;
+    color: #349723;
 }
 
 a.negative {
-  font-weight: bold;
-  color: #aaaaaa;
+    font-weight: bold;
+    color: #aaaaaa;
 }
 
 .underline {
-  text-decoration: underline;
+    text-decoration: underline;
 }
 
 .type-icon {
-  margin-right: 1em;
+    margin-right: 1em;
 }
 
 .square {
-  margin-right: 1em;
+    margin-right: 1em;
+}
+
+.top {
+    padding: 0 0.5em;
+}
+
+.top > a {
+    padding: 0 1em;
+}
+
+.top > a:hover {
+    text-decoration: none;
+}
+
+.top a.undo, .top a.redo {
+    color: #cccccc;
+}
+
+.top a.undo[data-disabled="false"], .top a.redo[data-disabled="false"] {
+    color: #00b7ff;
 }

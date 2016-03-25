@@ -1,18 +1,22 @@
 <!DOCTYPE html>
 <html>
-  <head>
+<head>
     <title>{{title}}</title>
-    <link rel='stylesheet' href='/stylesheets/bootstrap.min.css' />
-    <link rel='stylesheet' href='/stylesheets/font-awesome.css' />
-    <link rel='stylesheet' href='/stylesheets/style.css' />
+    <link rel='stylesheet' href='/stylesheets/bootstrap.min.css'/>
+    <link rel='stylesheet' href='/stylesheets/font-awesome.css'/>
+    <link rel='stylesheet' href='/stylesheets/style.css'/>
     <script type='application/javascript' src="/javascripts/jquery.min.js"></script>
     <script type='application/javascript' src="/javascripts/bootstrap.min.js"></script>
     <script type='application/javascript' src="/javascripts/bootbox.min.js"></script>
     <script type='application/javascript' src="/javascripts/three.min.js"></script>
     <script type='application/javascript' src="/javascripts/map-parser.js"></script>
-  </head>
-  <body>
-    <a onclick="location.href='/';">HOME</a>
-    {{{body}}}
-  </body>
+</head>
+<body>
+<div class="top">
+    <a class="fa fa-2x fa-home" onclick="location.href='/';"></a>
+    <a class="fa fa-2x fa-undo undo" onclick="undo();"></a>
+    <a class="fa fa-2x fa-repeat redo" onclick="redo();"></a>
+</div>
+{{{body}}}
+</body>
 </html>
