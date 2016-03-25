@@ -1,8 +1,5 @@
 // TODO
-// - Edit node tags
-// - Edit way tags
-// - Sanity checks such as not possible to move node into node in same way, not possible to create a way between points crossing others or nodes already within same way
-// - Add node to start/end of current ways
+// - Sanity checks such as not possible to move node into node in same way, not possible to create a way between points crossing others or nodes already within same way (?)
 
 // Code for getting image data (and adding as an image to the page)
 //var canvas = document.querySelector('canvas');
@@ -44,6 +41,9 @@ var rollingUniqueId = 0;
 var wayPartColor = 0xffffff;
 var nodeColor = 0xccccff;
 
+var smallMapMove;
+var largeMapMove;
+
 function parseMapData() {
     var data = window.mapData;
     globalMapData.bounds = {
@@ -52,6 +52,10 @@ function parseMapData() {
         maxY: data.bounds[0].$.minlat, // Shift min and max here
         minY: data.bounds[0].$.maxlat
     };
+
+    // Calculate how much a small and big move should be when moving nodes
+    smallMapMove = Math.round(Math.abs(globalMapData.bounds.maxX - globalMapData.bounds.minX) / (resolution / 4));
+    largeMapMove = smallMapMove * 5;
 
     var hashTypes = ['node', 'way', 'relation'];
     for (var typeIndex = 0; typeIndex < hashTypes.length; typeIndex++) {
@@ -246,6 +250,16 @@ function editWayName(id, oldName) {
     });
 }
 
+function moveNode(id, movement) {
+    saveBackupData();
+
+    globalMapData.node[id].$.lon += movement.lon;
+    globalMapData.node[id].$.lat += movement.lat;
+
+    cleanupAndRerender();
+    highlightNode(id);
+}
+
 function getInfo(type, id, wayPartId) {
     var data;
     if (type === 'waypart') {
@@ -264,6 +278,18 @@ function getInfo(type, id, wayPartId) {
         }
 
         if (type === 'node') {
+            data += ' <a class="inline fa fa-long-arrow-left" title="Move node a chunk west" onclick="moveNode(\'' + id + '\', {lon: -' + largeMapMove + ', lat: 0})"></a>'; // Adjust node position a chunk west
+            data += ' <a class="inline fa fa-arrow-left" title="Move node slightly west" onclick="moveNode(\'' + id + '\', {lon: -' + smallMapMove + ', lat: 0})"></a>'; // Adjust node position slightly west
+
+            data += ' <a class="inline fa fa-arrow-right" title="Move node slightly east" onclick="moveNode(\'' + id + '\', {lon: ' + smallMapMove + ', lat: 0})"></a>'; // Adjust node position slightly east
+            data += ' <a class="inline fa fa-long-arrow-right" title="Move node a chunk east" onclick="moveNode(\'' + id + '\', {lon: ' + largeMapMove + ', lat: 0})"></a>'; // Adjust node position a chunk east
+
+            data += ' <a class="inline fa fa-long-arrow-up" title="Move node a chunk north" onclick="moveNode(\'' + id + '\', {lon: 0, lat: ' + largeMapMove + '})"></a>'; // Adjust node position a chunk north
+            data += ' <a class="inline fa fa-arrow-up" title="Move node slightly north" onclick="moveNode(\'' + id + '\', {lon: 0, lat: ' + smallMapMove + '})"></a>'; // Adjust node position slightly north
+
+            data += ' <a class="inline fa fa-arrow-down" title="Move node slightly south" onclick="moveNode(\'' + id + '\', {lon: 0, lat: -' + smallMapMove + '})"></a>'; // Adjust node position slightly south
+            data += ' <a class="inline fa fa-long-arrow-down" title="Move node a chunk south" onclick="moveNode(\'' + id + '\', {lon: 0, lat: -' + largeMapMove + '})"></a>'; // Adjust node position a chunk south
+
             data += ' <a class="inline fa fa-link" title="Create a way between this and another node" onclick="createWayFrom(\'' + type + '\', \'' + id + '\')"></a>'; // Create a new way from this node to another one
         }
     }
@@ -567,7 +593,7 @@ function initCanvas() {
     }, false);
 
     window.render = function render() {
-        //        requestAnimationFrame(window.render);
+        //requestAnimationFrame(window.render);
 
         renderer.render(scene, camera);
     };
@@ -585,6 +611,16 @@ function highlightWayAndNodes(wayId) {
     var wayMembers = [].concat(way.wayParts, way.nodeObjects);
     var title = 'Items for way "' + (way.tag && way.tag.name || '?') + '":';
     printInfo(title, wayMembers);
+}
+
+function highlightNode(nodeId) {
+    for (var i = 0; i < scene.children.length; i++) {
+        var child = scene.children[i];
+        if (child.originType === 'node' && child.originId === nodeId) {
+            printInfo('Moved node', [child]);
+            return;
+        }
+    }
 }
 
 function addWayPart(positionData, scene, way) {
