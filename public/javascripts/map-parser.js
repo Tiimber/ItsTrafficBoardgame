@@ -4,13 +4,33 @@
 // - Sanity checks such as not possible to move node into node in same way, not possible to create a way between points crossing others or nodes already within same way
 // - Add node to start/end of current ways
 // - Undo
-// - More colors, one for each highlighted node, with color in info panel
 
 // Code for getting image data (and adding as an image to the page)
 //var canvas = document.querySelector('canvas');
 //var image = document.createElement('img');
 //image.src = canvas.toDataURL("image/png");
 //document.body.appendChild(image)
+
+var highlightColors = {
+    waypart: [
+        0xff0000,
+        0xff00aa,
+        0x00ff55,
+        0x0033ff,
+        0xcccc00,
+        0xff6600,
+        0x00ffff
+    ],
+    node: [
+        0xff6666,
+        0xff66aa,
+        0x66ff99,
+        0x6699ff,
+        0xffff66,
+        0xcc9966,
+        0x66ffff
+    ]
+};
 
 var globalMapData = {};
 var placedOutSphereIds = {};
@@ -64,36 +84,27 @@ function deselectHighlights() {
     }
 }
 
-function getHighlightForColor(c) {
+function getRgbString(c) {
     var r = (c & (0xff << 16)) >>> 16;
     var g = (c & (0xff << 8)) >>> 8;
-    var b = (c & 0xff) / 0xff;
-    var rgb = 'rgb(' + [r,g,b].join(',') + ')';
-
-    var shadedColor = shadeRGBColor(rgb, -0.35);
-    var highlightColor = eval('0x' + componentToHex(shadedColor.r) + componentToHex(shadedColor.g) + componentToHex(shadedColor.b));
-    return highlightColor;
+    var b = (c & 0xff);
+    return 'rgb(' + [r,g,b].join(',') + ')';
 }
 
-function componentToHex(c) {
-    var hex = c.toString(16);
-    return hex.length == 1 ? "0" + hex : hex;
-}
-
-function shadeRGBColor(color, percent) {
-    var f=color.split(","),t=percent<0?0:255,p=percent<0?percent*-1:percent,R=parseInt(f[0].slice(4)),G=parseInt(f[1]),B=parseInt(f[2]);
-    return {
-        r: Math.round((t-R)*p)+R,
-        g: Math.round((t-G)*p)+G,
-        b: Math.round((t-B)*p)+B
-    };
+function getHighlightColor(object, colorCounters) {
+    var nodeType = object.originType;
+    var colorArrForType = highlightColors[nodeType];
+    var colorForObject = colorArrForType[colorCounters[nodeType] % colorArrForType.length];
+    colorCounters[nodeType]++;
+    return colorForObject;
 }
 
 function selectHighlights() {
+    var colorCounters = {waypart: 0, node: 0};
     for (var i = 0; i < highlighted.length; i++) {
         var object = highlighted[i].object || highlighted[i];
         object.material.originalColor = object.material.color.getHex();
-        object.material.color.setHex(getHighlightForColor(object.material.originalColor));
+        object.material.color.setHex(getHighlightColor(object, colorCounters));
     }
 }
 
@@ -157,11 +168,13 @@ function printInfo(title, data, cancelBtn, okCb) {
     titleObj.innerHTML = title;
     dataArea.appendChild(titleObj);
 
+    var colorCounters = {waypart: 0, node: 0};
     for (i = 0; i < data.length; i++) {
         var itemData = document.createElement('div');
         itemData.style.marginLeft = '1em';
         var object = data[i].object || data[i];
-        itemData.innerHTML = getTypeHTML(object.originType) + ' ' + getInfo(object.originType, object.originId, object.originWPId);
+        var color = getRgbString(getHighlightColor(object, colorCounters));
+        itemData.innerHTML = getTypeHTML(object.originType) + '<span class="fa fa-square square" style="color: ' + color + ';"></span>' + getInfo(object.originType, object.originId, object.originWPId);
         dataArea.appendChild(itemData);
     }
 
@@ -235,21 +248,21 @@ function getInfo(type, id, wayPartId) {
     var data;
     if (type === 'waypart') {
         var wayForPart = globalMapData.way[id];
-        data = 'Part of <span class="underline">' + (wayForPart.tag.name ? wayForPart.tag.name : '?') + '</span> <a class="inline fa fa-eye" onclick="highlightWayAndNodes(\'' + id + '\');"></a>'; // Click to highlight all on this way
-        data += ' <a class="inline fa fa-pencil" onclick="editWayName(\'' + id + '\', \'' + (wayForPart.tag.name || '') + '\')"></a>'; // Edit this name
-        data += ' [<a class="inline" onclick="removeMapObj(\'' + type + '\', \'' + id + '\', \'' + wayPartId + '\')">DELETE</a>]'; // Delete this way part
-        data += ' [<a class="inline" onclick="splitWayPart(\'' + type + '\', \'' + id + '\', \'' + wayPartId + '\')">SPLIT UP</a>]'; // Split this way part into two parts
+        data = 'Part of <span class="underline">' + (wayForPart.tag.name ? wayForPart.tag.name : '?') + '</span> <a class="inline fa fa-eye" title="Show everything for this way" onclick="highlightWayAndNodes(\'' + id + '\');"></a>'; // Click to highlight all on this way
+        data += ' <a class="inline fa fa-pencil" title="Edit the name of this way" onclick="editWayName(\'' + id + '\', \'' + (wayForPart.tag.name || '') + '\')"></a>'; // Edit this name
+        data += ' <a class="inline fa fa-trash" title="Delete this part of the way" onclick="removeMapObj(\'' + type + '\', \'' + id + '\', \'' + wayPartId + '\')"></a>'; // Delete this way part
+        data += ' <a class="inline fa fa-share-alt" title="Split this part of the way into two pieces" onclick="splitWayPart(\'' + type + '\', \'' + id + '\', \'' + wayPartId + '\')"></a>'; // Split this way part into two parts
     } else {
-        data = getTags(globalMapData[type][id]);
+        data = 'Node ' + getTags(globalMapData[type][id]);
         if (canRemove(type, id)) {
-            data += ' [<a class="inline" onclick="removeMapObj(\'' + type + '\', \'' + id + '\')">DELETE</a>]'; // If possible - remove this node (or relation)
+            data += ' <a class="inline fa fa-trash" title="Remove this node" onclick="removeMapObj(\'' + type + '\', \'' + id + '\')"></a>'; // If possible - remove this node (or relation)
         }
         if (canMerge(type, id)) {
-            data += ' [<a class="inline" onclick="mergeMapObj(\'' + type + '\', \'' + id + '\')">MOVE INTO OTHER POINT</a>]'; // If possible - merge this node into another one
+            data += ' <a class="inline fa fa-arrows" title="Move (merge) this node with another" onclick="mergeMapObj(\'' + type + '\', \'' + id + '\')"></a>'; // If possible - merge this node into another one
         }
 
         if (type === 'node') {
-            data += ' [<a class="inline" onclick="createWayFrom(\'' + type + '\', \'' + id + '\')">CREATE WAY TO ANOTHER NODE</a>]'; // Create a new way from this node to another one
+            data += ' <a class="inline fa fa-link" title="Create a way between this and another node" onclick="createWayFrom(\'' + type + '\', \'' + id + '\')"></a>'; // Create a new way from this node to another one
         }
     }
     return data;
