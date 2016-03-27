@@ -46,10 +46,10 @@ a.negative {
     text-decoration: none;
 }
 
-.top a.undo, .top a.redo {
+.top a.undo, .top a.redo, .top a.zoomin, .top a.zoomout {
     color: #cccccc;
 }
 
-.top a.undo[data-disabled="false"], .top a.redo[data-disabled="false"] {
+.top a.undo[data-disabled="false"], .top a.redo[data-disabled="false"], .top a.zoomin[data-disabled="false"], .top a.zoomout[data-disabled="false"] {
     color: #00b7ff;
 }

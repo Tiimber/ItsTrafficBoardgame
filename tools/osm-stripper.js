@@ -123,12 +123,12 @@ function hasReferenceToNodeId (node, nodeId) {
     }
 }
 
-function removeUnreferencedNodes(osm) {
+function removeUnreferencedNodesWithoutTags(osm) {
     if (osm.node) {
         var nodeList = osm.node;
         for (var i = 0; i < nodeList.length; i++) {
             var nodeId = nodeList[i].$.id;
-            if (!hasReferenceToNodeId(osm.way, nodeId) && !hasReferenceToNodeId(osm.relation, nodeId)) {
+            if (!('tag' in nodeList[i]) && !hasReferenceToNodeId(osm.way, nodeId) && !hasReferenceToNodeId(osm.relation, nodeId)) {
                 nodeList.splice(i, 1);
                 i--;
             }
@@ -174,7 +174,7 @@ module.exports = function stripOSM(data) {
         removeUninterestingRelations(osm);
 
         // Remove unreferenced nodes
-        removeUnreferencedNodes(osm);
+        removeUnreferencedNodesWithoutTags(osm);
 
         // Reorganize tags
         reorganizeTags(osm, 'node', 'way', 'relation');

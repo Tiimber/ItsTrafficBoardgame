@@ -31,7 +31,9 @@ var highlightColors = {
 var globalMapData = {};
 var placedOutSphereIds = {};
 var scene;
+var camera;
 var resolution = 1000;
+var zoomLevel = 1.0;
 //var resolution = 4000; // Example - really blown up
 var wayHeightMap = 15; // Measure is in lon/lat (multiplied by 100 000)
 var highlighted = [];
@@ -72,7 +74,45 @@ function parseMapData() {
     addWays();
     window.render();
     placeDataArea();
+    setZoomStates();
 }
+
+var zoomLevels = [
+    0.5,
+    0.625,
+    0.75,
+    1.0
+];
+
+function zoomIn() {
+    var levelIndex = zoomLevels.indexOf(zoomLevel);
+    var canZoomIn = levelIndex < zoomLevels.length - 1;
+    if (canZoomIn) {
+        setZoomLevel(zoomLevels[levelIndex + 1]);
+    }
+}
+
+function zoomOut() {
+    var levelIndex = zoomLevels.indexOf(zoomLevel);
+    var canZoomOut = levelIndex > 0;
+    if (canZoomOut) {
+        setZoomLevel(zoomLevels[levelIndex - 1]);
+    }
+}
+
+function setZoomLevel(level) {
+    var levelIndex = zoomLevels.indexOf(level);
+    if (levelIndex !== -1) {
+        zoomLevel = level;
+
+        camera.zoom = zoomLevel;
+        camera.updateProjectionMatrix();
+        window.render();
+
+        setZoomStates();
+    }
+}
+
 
 function placeDataArea() {
     var dataArea = document.createElement('div');
@@ -449,6 +489,15 @@ function setUndoRedoState() {
     document.querySelector('.top .redo').dataset['disabled'] = !canRedo;
 }
 
+
+function setZoomStates() {
+    var levelIndex = zoomLevels.indexOf(zoomLevel);
+    var canZoomOut = levelIndex > 0;
+    var canZoomIn = levelIndex < zoomLevels.length - 1;
+    document.querySelector('.top .zoomin').dataset['disabled'] = !canZoomIn;
+    document.querySelector('.top .zoomout').dataset['disabled'] = !canZoomOut;
+}
+
 function cleanupAndRerender() {
     cleanCrossRefs();
     for (var childIndex = scene.children.length - 1; childIndex >= 0; childIndex--) {
@@ -571,8 +620,10 @@ function initCanvas() {
 
     scene = new THREE.Scene();
     var raycaster = new THREE.Raycaster();
-    //var camera = new THREE.PerspectiveCamera(globalMapData.bounds.maxX - globalMapData.bounds.minX, width / height, 0.1, 1000);
-    var camera = new THREE.OrthographicCamera(globalMapData.bounds.minX, globalMapData.bounds.maxX, globalMapData.bounds.minY, globalMapData.bounds.maxY, 0.1, 1000);
+    camera = new THREE.OrthographicCamera(globalMapData.bounds.minX, globalMapData.bounds.maxX, globalMapData.bounds.minY, globalMapData.bounds.maxY, 0.1, 1000);
+    //var xSpan = Math.abs(globalMapData.bounds.maxX - globalMapData.bounds.minX);
+    //var ySpan = Math.abs(globalMapData.bounds.maxY - globalMapData.bounds.minY);
+    //var camera = new THREE.OrthographicCamera(globalMapData.bounds.minX - xSpan / 20, globalMapData.bounds.maxX + xSpan / 20, globalMapData.bounds.minY  + ySpan / 20, globalMapData.bounds.maxY - ySpan / 20, 0.1, 1000);
     camera.position.z = 50;
 
     var renderer = new THREE.WebGLRenderer({preserveDrawingBuffer: true});
@@ -664,6 +715,19 @@ function addNodeObj(node, scene, way) {
     }
 }
 
+function addOutlines() {
+    var posBottomLeft = new THREE.Vector3(globalMapData.bounds.minX, globalMapData.bounds.minY, 0);
+    var posBottomRight = new THREE.Vector3(globalMapData.bounds.maxX, globalMapData.bounds.minY, 0);
+    var posTopLeft = new THREE.Vector3(globalMapData.bounds.minX, globalMapData.bounds.maxY, 0);
+    var posTopRight = new THREE.Vector3(globalMapData.bounds.maxX, globalMapData.bounds.maxY, 0);
+
+    var outlineMaterial = new THREE.LineBasicMaterial({color: 0x9999cc});
+    var geometry = new THREE.Geometry();
+    geometry.vertices.push(posBottomLeft, posBottomRight, posTopRight, posTopLeft, posBottomLeft);
+    var side = new THREE.Line(geometry, outlineMaterial);
+    scene.add(side);
+}
+
 function addWays() {
     currentKeptBackupData = JSON.parse(JSON.stringify(globalMapData));
 
@@ -694,6 +758,67 @@ function addWays() {
             }
         }
     }
+
+    addOutlines();
+    gatherNodesOfInterest();
+}
+
+function hasTagWithValues(tags, key, values) {
+    values = [].splice.call(arguments, 2);
+
+    if (key in tags) {
+        if (values.indexOf(tags[key]) !== -1) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function hasTags(tags, names) {
+    names = [].splice.call(arguments, 1);
+
+    for (var i = 0; i < names.length; i++) {
+        if (names[i] in tags) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+function gatherNodesOfInterest() {
+    var nodeIds = Object.getOwnPropertyNames(globalMapData.node);
+
+    function isShop(tags) {return hasTags(tags, 'shop');}
+    function isRestaurant(tags) {return hasTagWithValues(tags, 'amenity', 'fast_food', 'pub', 'restaurant');}
+
+    globalMapData.nodesOfInterest = nodeIds.reduce(
+        function (previous, key) {
+            var node = globalMapData.node[key];
+            if ('tag' in node && Object.getOwnPropertyNames(node.tag).length) {
+                var tags = node.tag;
+                var addToType = 'other';
+                // Detect what type it is
+                if (isShop(tags)) {
+                    addToType = 'shop';
+                } else if (isRestaurant(tags)) {
+                    addToType = 'food';
+                } else {
+                    console.log(node.tag);
+                }
+
+                // Add it
+                if (previous[addToType]) {
+                    previous[addToType].push(node);
+                } else {
+                    previous[addToType] = [node];
+                }
+            }
+            return previous;
+        }, {}
+    );
 }
 
 function isNodeOutside(lon, lat) {
