@@ -480,6 +480,7 @@ function importData() {
         value: '',
         callback: function(data) {
             if (data) {
+                saveBackupData();
                 var dataObj = JSON.parse(data);
                 globalMapData = dataObj;
                 cleanupAndRerender();
@@ -496,6 +497,7 @@ function load() {
             if (loadname) {
                 var data = window.localStorage.getItem('itsboard_' + loadname);
                 if (data) {
+                    saveBackupData();
                     var dataObj = JSON.parse(data);
                     globalMapData = dataObj;
                     cleanupAndRerender();
