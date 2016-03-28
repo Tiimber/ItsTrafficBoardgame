@@ -46,11 +46,11 @@ a.negative {
     text-decoration: none;
 }
 
-.top a.undo, .top a.redo, .top a.zoomin, .top a.zoomout {
+.top a.undo, .top a.redo, .top a.zoomin, .top a.zoomout, .top a.save, .top a.load {
     color: #cccccc;
 }
 
-.top a.undo[data-disabled="false"], .top a.redo[data-disabled="false"], .top a.zoomin[data-disabled="false"], .top a.zoomout[data-disabled="false"] {
+.top a.undo[data-disabled="false"], .top a.redo[data-disabled="false"], .top a.zoomin[data-disabled="false"], .top a.zoomout[data-disabled="false"], .top a.save[data-disabled="false"], .top a.load[data-disabled="false"] {
     color: #00b7ff;
 }
 
@@ -64,4 +64,19 @@ a.negative {
 
 .bold {
     font-weight: bold;
+}
+
+.icon-pre-save {
+    margin-right: -0.4em;
+    transform: scaleX(0.5);
+}
+
+.icon-post-load {
+    margin-left: -0.35em;
+    transform: scaleX(0.5);
+}
+
+.bootbox-body textarea {
+    width: 100%;
+    height: 15em;
 }

@@ -84,6 +84,7 @@ function parseMapData() {
     window.render();
     placeDataArea();
     setZoomStates();
+    setSaveLoadState();
 }
 
 function presentInfo() {
@@ -466,6 +467,56 @@ function saveBackupData() {
     setUndoRedoState();
 }
 
+function exportData() {
+    bootbox.alert({
+        title: 'Current map data:',
+        message: '<textarea onfocus="this.onclick();" onblur="this.onclick();" onclick="this.setSelectionRange(0, this.value.length);">' + JSON.stringify(currentKeptBackupData) + '</textarea>'
+    });
+}
+
+function importData() {
+    bootbox.prompt({
+        title: 'Input map data:',
+        value: '',
+        callback: function(data) {
+            if (data) {
+                var dataObj = JSON.parse(data);
+                globalMapData = dataObj;
+                cleanupAndRerender();
+            }
+        }
+    });
+}
+
+function load() {
+    bootbox.prompt({
+        title: 'Enter name to load',
+        value: '',
+        callback: function(loadname) {
+            if (loadname) {
+                var data = window.localStorage.getItem('itsboard_' + loadname);
+                if (data) {
+                    var dataObj = JSON.parse(data);
+                    globalMapData = dataObj;
+                    cleanupAndRerender();
+                }
+            }
+        }
+    });
+}
+
+function save() {
+    bootbox.prompt({
+        title: 'Enter name to save as',
+        value: '',
+        callback: function(savename) {
+            if (savename) {
+                window.localStorage.setItem('itsboard_' + savename, JSON.stringify(currentKeptBackupData));
+            }
+        }
+    });
+}
+
 function undo() {
     if (backupData.length) {
         cleanCrossRefs();
@@ -500,6 +551,11 @@ function redo() {
 
         setUndoRedoState();
     }
+}
+
+function setSaveLoadState() {
+    document.querySelector('.top .save').dataset['disabled'] = false;
+    document.querySelector('.top .load').dataset['disabled'] = false;
 }
 
 function setUndoRedoState() {
@@ -758,6 +814,10 @@ function addOutlines() {
     scene.add(side);
 }
 
+function addBuildings() {
+
+}
+
 var logoPctOfMap = 0.12;
 var logoOriginalWidth = 525;
 var logoOriginalHeight = 401;
@@ -815,6 +875,7 @@ function addWays() {
     }
 
     addOutlines();
+    addBuildings();
     addLogo();
     gatherNodesOfInterest();
 }
