@@ -43,8 +43,13 @@ var rollingUniqueId = 0;
 var wayPartColor = 0xffffff;
 var nodeColor = 0xccccff;
 
+var calculateRatioX = 37.0;
+//var calculateRatioX = 21.0; // To make it square (but stretch it)
+var calculateRatioY = 21.0;
+
 var smallMapMove;
 var largeMapMove;
+var mapEntrances;
 
 function parseMapData() {
     var data = window.mapData;
@@ -55,8 +60,12 @@ function parseMapData() {
         minY: data.bounds[0].$.maxlat
     };
 
+    globalMapData.bounds.width = Math.abs(globalMapData.bounds.maxX - globalMapData.bounds.minX);
+    globalMapData.bounds.height = Math.abs(globalMapData.bounds.maxY - globalMapData.bounds.minY);
+
+
     // Calculate how much a small and big move should be when moving nodes
-    smallMapMove = Math.round(Math.abs(globalMapData.bounds.maxX - globalMapData.bounds.minX) / (resolution / 4));
+    smallMapMove = Math.round(globalMapData.bounds.width / (resolution / 4));
     largeMapMove = smallMapMove * 5;
 
     var hashTypes = ['node', 'way', 'relation'];
@@ -75,6 +84,15 @@ function parseMapData() {
     window.render();
     placeDataArea();
     setZoomStates();
+}
+
+function presentInfo() {
+    var targetNumberOfMapEntrances = 3;
+    var fullInfo = 'Map entrances/exits: <span class="bold ' + (mapEntrances === targetNumberOfMapEntrances ? 'green' : 'red') + '">' + mapEntrances + '</span> (Expected: ' + targetNumberOfMapEntrances + ')<br/>';
+    bootbox.dialog({
+        title: 'Map summary',
+        message: fullInfo
+    });
 }
 
 var zoomLevels = [
@@ -390,7 +408,7 @@ function doSplitWayPart(wayId, wayPartId) {
     cleanupAndRerender();
 }
 
-function doRemoveWayPart(wayId, wayPartId) {
+function doRemoveWayPart(wayId, wayPartId, preventCleanupAndRerender) {
     var way = globalMapData.way[wayId];
     var numberOfWayParts = way.wayParts.length;
     var wayPartIndex;
@@ -423,7 +441,9 @@ function doRemoveWayPart(wayId, wayPartId) {
         };
     }
 
-    cleanupAndRerender();
+    if (!preventCleanupAndRerender) {
+        cleanupAndRerender();
+    }
 }
 
 function makeid(length, numbersOnly) {
@@ -524,20 +544,33 @@ function splitWayPart(type, id, wayPartId) {
 }
 
 function removeMapObj(type, id, wayPartId) {
-    var removeChild;
-    for (var i = 0; i < scene.children.length; i++) {
-        var child = scene.children[i];
-        if (child.originType === type && child.originId === id && (!wayPartId || child.originWPId === parseInt(wayPartId, 10))) {
-            removeChild = child;
-            printInfo('Remove selected node?', [child], true, function () {
-                saveBackupData();
-                if (type === 'node') {
-                    doRemoveNode(id);
-                } else if (type === 'waypart') {
-                    doRemoveWayPart(id, parseInt(wayPartId, 10));
-                }
-            });
-            break;
+    if (type === 'way') {
+        var way = globalMapData.way[id];
+        printInfo('Remove entire way?', way.wayParts, true, function () {
+            saveBackupData();
+            while (way.wayParts.length) {
+                var wayPart = way.wayParts[0];
+                doRemoveWayPart(id, wayPart.originWPId, true);
+                way.wayParts.splice(0, 1);
+            }
+            cleanupAndRerender();
+        });
+    } else {
+        var removeChild;
+        for (var i = 0; i < scene.children.length; i++) {
+            var child = scene.children[i];
+            if (child.originType === type && child.originId === id && (!wayPartId || child.originWPId === parseInt(wayPartId, 10))) {
+                removeChild = child;
+                printInfo('Remove selected node?', [child], true, function () {
+                    saveBackupData();
+                    if (type === 'node') {
+                        doRemoveNode(id);
+                    } else if (type === 'waypart') {
+                        doRemoveWayPart(id, parseInt(wayPartId, 10));
+                    }
+                });
+                break;
+            }
         }
     }
 }
@@ -607,9 +640,6 @@ function initCanvas() {
     var width = resolution;
     var height = resolution;
 
-    var calculateRatioX = 37.0;
-    //var calculateRatioX = 21.0; // To make it square (but stretch it)
-    var calculateRatioY = 21.0;
     var widthPctOfHeight = (Math.abs(globalMapData.bounds.maxX - globalMapData.bounds.minX) / calculateRatioX) / (Math.abs(globalMapData.bounds.maxY - globalMapData.bounds.minY) / calculateRatioY);
     var canvas = document.querySelector('canvas');
     if (widthPctOfHeight > 1) {
@@ -660,7 +690,7 @@ function mouseOn(scene, camera, raycaster, pos) {
 function highlightWayAndNodes(wayId) {
     var way = globalMapData.way[wayId];
     var wayMembers = [].concat(way.wayParts, way.nodeObjects);
-    var title = 'Items for way "' + (way.tag && way.tag.name || '?') + '":';
+    var title = 'Items for way "' + (way.tag && way.tag.name || '?') + '": <a class="fa fa-trash" onclick="removeMapObj(\'way\', ' + wayId + ');"></a>';
     printInfo(title, wayMembers);
 }
 
@@ -728,7 +758,30 @@ function addOutlines() {
     scene.add(side);
 }
 
+var logoPctOfMap = 0.12;
+var logoOriginalWidth = 525;
+var logoOriginalHeight = 401;
+
+function addLogo() {
+/*
+    var img = new THREE.MeshBasicMaterial({
+        map: THREE.ImageUtils.loadTexture('/images/logo.png')
+    });
+    img.map.needsUpdate = true;
+
+    var goalWidth = logoPctOfMap * globalMapData.bounds.width;
+    var goalHeight = logoOriginalHeight / logoOriginalWidth * goalWidth * (calculateRatioY / calculateRatioX);
+
+    var image = new THREE.Mesh(new THREE.PlaneGeometry(goalWidth, goalHeight), img);
+    image.position.x = globalMapData.bounds.maxX - goalWidth / 2;
+    image.position.y = globalMapData.bounds.maxY + goalHeight / 2;
+    image.overdraw = true;
+    scene.add(image);
+*/
+}
+
 function addWays() {
+    mapEntrances = 0;
     currentKeptBackupData = JSON.parse(JSON.stringify(globalMapData));
 
     var ways = globalMapData.way;
@@ -738,12 +791,14 @@ function addWays() {
             way.wayParts = [];
             way.nodeObjects = [];
 
-            removeOutsideNodes(way.nd);
+            var entranceExitCount = removeOutsideNodes(way.nd);
             // All nodes were outside, remove this way
             if (!way.nd.length) {
                 delete globalMapData.way[wayId];
                 continue;
             }
+
+            mapEntrances += entranceExitCount;
 
             var previousNode = getNode(way.nd[0].$.ref);
             addNodeObj(previousNode, scene, way);
@@ -760,6 +815,7 @@ function addWays() {
     }
 
     addOutlines();
+    addLogo();
     gatherNodesOfInterest();
 }
 
@@ -792,7 +848,14 @@ function gatherNodesOfInterest() {
     var nodeIds = Object.getOwnPropertyNames(globalMapData.node);
 
     function isShop(tags) {return hasTags(tags, 'shop');}
-    function isRestaurant(tags) {return hasTagWithValues(tags, 'amenity', 'fast_food', 'pub', 'restaurant');}
+    function isTree(tags) {return hasTagWithValues(tags, 'natural', 'tree');}
+    function isTrafficSignals(tags) {return hasTagWithValues(tags, 'highway', 'traffic_signals');}
+    function isCrossing(tags) {return hasTagWithValues(tags, 'highway', 'crossing');}
+    function isRestaurant(tags) {return hasTagWithValues(tags, 'amenity', 'fast_food', 'pub', 'restaurant', 'cafe');}
+    function isPublicTransport(tags) {return hasTagWithValues(tags, 'highway', 'bus_stop') || hasTagWithValues(tags, 'shelter_type', 'public_transport') || hasTagWithValues(tags, 'public_transport', 'platform');}
+    function isHotel(tags) {return hasTagWithValues(tags, 'tourism', 'hotel');}
+    function isATM(tags) {return hasTagWithValues(tags, 'amenity', 'atm');}
+    function isParking(tags) {return hasTagWithValues(tags, 'amenity', 'parking');}
 
     globalMapData.nodesOfInterest = nodeIds.reduce(
         function (previous, key) {
@@ -803,10 +866,25 @@ function gatherNodesOfInterest() {
                 // Detect what type it is
                 if (isShop(tags)) {
                     addToType = 'shop';
+                } else if (isTrafficSignals(tags)) {
+                    addToType = 'trafficSignals';
+                } else if (isCrossing(tags)) {
+                    addToType = 'crossing';
                 } else if (isRestaurant(tags)) {
                     addToType = 'food';
+                } else if (isTree(tags)) {
+                    addToType = 'tree';
+                } else if (isPublicTransport(tags)) {
+                    addToType = 'publicTransport';
+                } else if (isHotel(tags)) {
+                    addToType = 'hotel';
+                } else if (isATM(tags)) {
+                    addToType = 'atm';
+                } else if (isParking(tags)) {
+                    addToType = 'parking';
                 } else {
-                    console.log(node.tag);
+                    // Other - uncomment to print
+                    //console.log(node.tag);
                 }
 
                 // Add it
@@ -854,6 +932,9 @@ function removeOutsideNodes(nodes) {
     if (numberEndNodesOutside > 1) {
         nodes.splice(nodes.length - (numberEndNodesOutside - 1));
     }
+
+    // Return 0-2 depending on if any nodes are outside and if so, how many endpoints are exiting or entering the map
+    return !!numberEndNodesOutside + !!numberBeginningNodesOutside;
 }
 
 function getNode(id) {

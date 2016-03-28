@@ -53,3 +53,15 @@ a.negative {
 .top a.undo[data-disabled="false"], .top a.redo[data-disabled="false"], .top a.zoomin[data-disabled="false"], .top a.zoomout[data-disabled="false"] {
     color: #00b7ff;
 }
+
+.green {
+    color: darkgreen;
+}
+
+.red {
+    color: red;
+}
+
+.bold {
+    font-weight: bold;
+}
