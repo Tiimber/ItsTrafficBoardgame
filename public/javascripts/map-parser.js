@@ -46,6 +46,7 @@ var nodeColor = 0xccccff;
 var calculateRatioX = 37.0;
 //var calculateRatioX = 21.0; // To make it square (but stretch it)
 var calculateRatioY = 21.0;
+var shortcutKeyDown = false;
 
 var smallMapMove;
 var largeMapMove;
@@ -136,6 +137,7 @@ function setZoomLevel(level) {
 function placeDataArea() {
     var dataArea = document.createElement('div');
     dataArea.id = 'dataArea';
+    dataArea.className = 'bottom';
     document.body.appendChild(dataArea);
 }
 
@@ -221,6 +223,11 @@ function printInfo(title, data, cancelBtn, okCb) {
         }
     }
 
+    if (shortcutKeyDown && okCb) {
+        okCb();
+        return;
+    }
+
     // Save last info
     lastPrintInfo = [].slice.call(arguments, 0);
 
@@ -245,7 +252,8 @@ function printInfo(title, data, cancelBtn, okCb) {
     if (okCb) {
         var okBtnObj = document.createElement('a');
         okBtnObj.className = 'positive';
-        okBtnObj.innerHTML = 'Confirm!';
+        okBtnObj.id = 'confirm-action';
+        okBtnObj.innerHTML = '<span class="underline">C</span>onfirm!';
         okBtnObj.onclick = okCb;
         dataArea.appendChild(okBtnObj);
     }
@@ -253,7 +261,8 @@ function printInfo(title, data, cancelBtn, okCb) {
     if (cancelBtn) {
         var cancelBtnObj = document.createElement('a');
         cancelBtnObj.className = 'negative';
-        cancelBtnObj.innerHTML = 'Cancel';
+        cancelBtnObj.id = 'abort-action';
+        cancelBtnObj.innerHTML = '<span class="underline">A</span>bort';
         cancelBtnObj.onclick = function () {
             printInfo('', []);
         };
@@ -731,11 +740,38 @@ function initCanvas() {
         mouseOn(scene, camera, raycaster, relativePoint);
     }, false);
 
+    document.addEventListener('keydown', function(event) {
+        shortcutKeyDown = event.altKey;
+    });
+
+    document.addEventListener('keyup', function(event) {
+        shortcutKeyDown = event.altKey;
+        var char = String.fromCharCode(event.keyCode);
+        if (char.toLowerCase() === 'c') {
+            var confirmLink = document.querySelector('#confirm-action');
+            if (confirmLink) {
+                clickObject(confirmLink);
+            }
+        } else if (char.toLocaleLowerCase() === 'a') {
+            var abortLink = document.querySelector('#abort-action');
+            if (abortLink) {
+                clickObject(abortLink);
+            }
+        }
+    });
+
     window.render = function render() {
         //requestAnimationFrame(window.render);
 
         renderer.render(scene, camera);
     };
+}
+
+function clickObject(object) {
+    var evt = document.createEvent("MouseEvents");
+    evt.initMouseEvent("click", true, true, window, 1, 0, 0, 0, 0, false, false, false, false, 0, null);
+
+    object.dispatchEvent(evt);
 }
 
 function mouseOn(scene, camera, raycaster, pos) {
