@@ -1,6 +1,3 @@
-// TODO
-// - Sanity checks such as not possible to move node into node in same way, not possible to create a way between points crossing others or nodes already within same way (?)
-
 // Code for getting image data (and adding as an image to the page)
 //var canvas = document.querySelector('canvas');
 //var image = document.createElement('img');
@@ -54,31 +51,36 @@ var mapEntrances;
 
 function parseMapData() {
     var data = window.mapData;
-    globalMapData.bounds = {
-        minX: data.bounds[0].$.minlon,
-        maxX: data.bounds[0].$.maxlon,
-        maxY: data.bounds[0].$.minlat, // Shift min and max here
-        minY: data.bounds[0].$.maxlat
-    };
+    if (data.bounds.minX) {
+        // If data was loaded directly from localCache or by entering JSON chunk, no extra processing needed
+        globalMapData = data;
+    } else {
+        // File was uploaded, do some extra processing
+        globalMapData.bounds = {
+            minX: data.bounds[0].$.minlon,
+            maxX: data.bounds[0].$.maxlon,
+            maxY: data.bounds[0].$.minlat, // Shift min and max here
+            minY: data.bounds[0].$.maxlat
+        };
 
-    globalMapData.bounds.width = Math.abs(globalMapData.bounds.maxX - globalMapData.bounds.minX);
-    globalMapData.bounds.height = Math.abs(globalMapData.bounds.maxY - globalMapData.bounds.minY);
+        globalMapData.bounds.width = Math.abs(globalMapData.bounds.maxX - globalMapData.bounds.minX);
+        globalMapData.bounds.height = Math.abs(globalMapData.bounds.maxY - globalMapData.bounds.minY);
 
+        var hashTypes = ['node', 'way', 'relation'];
+        for (var typeIndex = 0; typeIndex < hashTypes.length; typeIndex++) {
+            var type = hashTypes[typeIndex];
+            var list = {};
+            for (var itemIndex = 0; itemIndex < data[type].length; itemIndex++) {
+                var item = data[type][itemIndex];
+                list[item.$.id] = item;
+            }
+            globalMapData[type] = list;
+        }
+    }
 
     // Calculate how much a small and big move should be when moving nodes
     smallMapMove = Math.round(globalMapData.bounds.width / (resolution / 4));
     largeMapMove = smallMapMove * 5;
-
-    var hashTypes = ['node', 'way', 'relation'];
-    for (var typeIndex = 0; typeIndex < hashTypes.length; typeIndex++) {
-        var type = hashTypes[typeIndex];
-        var list = {};
-        for (var itemIndex = 0; itemIndex < data[type].length; itemIndex++) {
-            var item = data[type][itemIndex];
-            list[item.$.id] = item;
-        }
-        globalMapData[type] = list;
-    }
 
     initCanvas();
     addWays();
@@ -86,6 +88,7 @@ function parseMapData() {
     placeDataArea();
     setZoomStates();
     setSaveLoadState();
+    setUploadDownloadState();
 }
 
 function presentInfo() {
@@ -489,13 +492,31 @@ function importData() {
         value: '',
         callback: function(data) {
             if (data) {
-                saveBackupData();
                 var dataObj = JSON.parse(data);
-                globalMapData = dataObj;
-                cleanupAndRerender();
+                if (scene) {
+                    saveBackupData();
+                    globalMapData = dataObj;
+                    cleanupAndRerender();
+                } else {
+                    postForm(dataObj, '/preview');
+                }
             }
         }
     });
+}
+
+function postForm(json, url) {
+    var form = document.createElement('form');
+    form.action = url;
+    form.method = 'POST';
+
+    var input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'data';
+    input.value = JSON.stringify(json);
+    form.appendChild(input);
+
+    form.submit();
 }
 
 function load() {
@@ -506,10 +527,14 @@ function load() {
             if (loadname) {
                 var data = window.localStorage.getItem('itsboard_' + loadname);
                 if (data) {
-                    saveBackupData();
                     var dataObj = JSON.parse(data);
-                    globalMapData = dataObj;
-                    cleanupAndRerender();
+                    if (scene) {
+                        saveBackupData();
+                        globalMapData = dataObj;
+                        cleanupAndRerender();
+                    } else {
+                        postForm(dataObj, '/preview');
+                    }
                 }
             }
         }
@@ -567,6 +592,11 @@ function redo() {
 function setSaveLoadState() {
     document.querySelector('.top .save').dataset['disabled'] = false;
     document.querySelector('.top .load').dataset['disabled'] = false;
+}
+
+function setUploadDownloadState() {
+    document.querySelector('.top .upload').dataset['disabled'] = false;
+    document.querySelector('.top .download').dataset['disabled'] = false;
 }
 
 function setUndoRedoState() {

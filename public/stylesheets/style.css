@@ -56,11 +56,11 @@ a.negative {
     text-decoration: none;
 }
 
-.top a.undo, .top a.redo, .top a.zoomin, .top a.zoomout, .top a.save, .top a.load {
+.top a.undo, .top a.redo, .top a.zoomin, .top a.zoomout, .top a.save, .top a.load, .top a.upload, .top a.download {
     color: #cccccc;
 }
 
-.top a.undo[data-disabled="false"], .top a.redo[data-disabled="false"], .top a.zoomin[data-disabled="false"], .top a.zoomout[data-disabled="false"], .top a.save[data-disabled="false"], .top a.load[data-disabled="false"] {
+.top a.undo[data-disabled="false"], .top a.redo[data-disabled="false"], .top a.zoomin[data-disabled="false"], .top a.zoomout[data-disabled="false"], .top a.save[data-disabled="false"], .top a.load[data-disabled="false"] , .top a.upload[data-disabled="false"], .top a.download[data-disabled="false"] {
     color: #00b7ff;
 }
 

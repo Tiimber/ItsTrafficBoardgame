@@ -23,21 +23,33 @@ router.get('/start', function (req, res, next) {
 /* Preview - upload file and preview it */
 router.post('/preview', function (req, res, next) {
     var uploadedMapInfo = req.files && req.files[0];
-    var uploadedFilename = path.join(__dirname, '..', uploadedMapInfo.path);
-    clearOldFiles(path.dirname(uploadedFilename), 1);
-    var mapXmlData = fs.readFileSync(uploadedFilename);
-    xmlParse(mapXmlData, function (err, jsonMapData) {
-        var tmpNameSync = randomstring.generate() + '.js';
-        var generatedTmpFile = path.join(__dirname, '..', 'public', 'javascripts', 'tmp', tmpNameSync);
-
-        // Strip off uninteresting stuff
-        osmStripper(jsonMapData);
-
-        // Save tmp file for output
-        clearOldFiles(path.dirname(generatedTmpFile), 1);
-        fs.writeFileSync(generatedTmpFile, 'window.mapData = ' + JSON.stringify(jsonMapData.osm), 'utf-8');
-        res.render('preview', {mapDataScript: 'javascripts/tmp/' + tmpNameSync});
-    });
+    if (uploadedMapInfo) {
+        // File was uploaded, parse the XML to JSON, strip it off and then write tmp file with JSON
+        var uploadedFilename = path.join(__dirname, '..', uploadedMapInfo.path);
+        clearOldFiles(path.dirname(uploadedFilename), 1);
+        var mapXmlData = fs.readFileSync(uploadedFilename);
+        xmlParse(mapXmlData, function (err, jsonMapData) {
+            renderWithJSONData(res, jsonMapData, true);
+        });
+    } else {
+        // JSON was posted
+        renderWithJSONData(res, {osm: JSON.parse(req.body.data)}, false);
+    }
 });
+
+function renderWithJSONData(res, jsonMapData, doStripOsm) {
+    var tmpNameSync = randomstring.generate() + '.js';
+    var generatedTmpFile = path.join(__dirname, '..', 'public', 'javascripts', 'tmp', tmpNameSync);
+
+    // Strip off uninteresting stuff
+    if (doStripOsm) {
+        osmStripper(jsonMapData);
+    }
+
+    // Save tmp file for output
+    clearOldFiles(path.dirname(generatedTmpFile), 1);
+    fs.writeFileSync(generatedTmpFile, 'window.mapData = ' + JSON.stringify(jsonMapData.osm), 'utf-8');
+    res.render('preview', {mapDataScript: 'javascripts/tmp/' + tmpNameSync});
+}
 
 module.exports = router;
