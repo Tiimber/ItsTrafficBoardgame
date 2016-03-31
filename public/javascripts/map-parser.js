@@ -37,6 +37,8 @@ var highlighted = [];
 var nextClick = null;
 var rollingUniqueId = 0;
 
+var targetNumberOfMapEntrances = 3;
+
 var wayPartColor = 0xffffff;
 var nodeColor = 0xccccff;
 
@@ -89,10 +91,10 @@ function parseMapData() {
     setZoomStates();
     setSaveLoadState();
     setUploadDownloadState();
+    setNextStepState();
 }
 
 function presentInfo() {
-    var targetNumberOfMapEntrances = 3;
     var fullInfo = 'Map entrances/exits: <span class="bold ' + (mapEntrances === targetNumberOfMapEntrances ? 'green' : 'red') + '">' + mapEntrances + '</span> (Expected: ' + targetNumberOfMapEntrances + ')<br/>';
     bootbox.dialog({
         title: 'Map summary',
@@ -599,6 +601,26 @@ function setUploadDownloadState() {
     document.querySelector('.top .download').dataset['disabled'] = false;
 }
 
+function nextStep() {
+    alert('TODO');
+}
+
+function setNextStepState() {
+    var nextStepButton = document.querySelector('.top .next-step');
+    var page = document.querySelector('.current-page-id').innerHTML;
+    switch (page) {
+        case 'preview':
+            nextStepButton.dataset['disabled'] = (mapEntrances === targetNumberOfMapEntrances ? 'false' : 'true');
+            nextStepButton.title = 'Edit nodes and spots';
+            break;
+        case 'start':
+        default:
+            nextStepButton.dataset['disabled'] = 'true';
+            nextStepButton.title = '';
+            break;
+    }
+}
+
 function setUndoRedoState() {
     var canUndo = backupData.length;
     var canRedo = forwardData.length;
@@ -623,6 +645,7 @@ function cleanupAndRerender() {
     printInfo('', []);
     addWays();
     window.render();
+    setNextStepState();
 }
 
 function splitWayPart(type, id, wayPartId) {

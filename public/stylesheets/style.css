@@ -4,6 +4,10 @@ body {
     margin-bottom: 102px;
 }
 
+.current-page-id {
+    display: none;
+}
+
 a {
     display: block;
     margin: 0.5em 0;
@@ -56,11 +60,11 @@ a.negative {
     text-decoration: none;
 }
 
-.top a.undo, .top a.redo, .top a.zoomin, .top a.zoomout, .top a.save, .top a.load, .top a.upload, .top a.download {
+.top a.undo, .top a.redo, .top a.zoomin, .top a.zoomout, .top a.save, .top a.load, .top a.upload, .top a.download, .top a.next-step {
     color: #cccccc;
 }
 
-.top a.undo[data-disabled="false"], .top a.redo[data-disabled="false"], .top a.zoomin[data-disabled="false"], .top a.zoomout[data-disabled="false"], .top a.save[data-disabled="false"], .top a.load[data-disabled="false"] , .top a.upload[data-disabled="false"], .top a.download[data-disabled="false"] {
+.top a.undo[data-disabled="false"], .top a.redo[data-disabled="false"], .top a.zoomin[data-disabled="false"], .top a.zoomout[data-disabled="false"], .top a.save[data-disabled="false"], .top a.load[data-disabled="false"] , .top a.upload[data-disabled="false"], .top a.download[data-disabled="false"], .top a.next-step[data-disabled="false"] {
     color: #00b7ff;
 }
 

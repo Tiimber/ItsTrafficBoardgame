@@ -11,7 +11,7 @@
     <script type='application/javascript' src="/javascripts/three.min.js"></script>
     <script type='application/javascript' src="/javascripts/map-parser.js"></script>
 </head>
-<body>
+<body onload="setNextStepState();">
 <div class="top">
     <a class="fa fa-2x fa-home" title="Home" onclick="location.href='/';"></a>
     <a class="fa fa-2x fa-undo undo" title="Undo" onclick="undo();"></a>
@@ -23,12 +23,13 @@
         <span class="fa fa-2x fa-long-arrow-right icon-pre-save"></span>
         <span class="fa fa-2x fa-floppy-o"></span>
     </a>
-    <a class="fa load" title="Load current map from memory" data-disabled="false" onclick="load();">
+    <a class="fa load" title="Load map from memory" data-disabled="false" onclick="load();">
         <span class="fa fa-2x fa-floppy-o"></span>
         <span class="fa fa-2x fa-long-arrow-right icon-post-load"></span>
     </a>
-    <a class="fa fa-2x fa-cloud-download download" title="Export map data" onclick="exportData();"></a>
+    <a class="fa fa-2x fa-cloud-download download" title="Export current map data" onclick="exportData();"></a>
     <a class="fa fa-2x fa-cloud-upload upload" title="Import map data" data-disabled="false" onclick="importData();"></a>
+    <a class="fa fa-2x fa-caret-square-o-right next-step" title="Start" data-disabled="false" onclick="nextStep();"></a>
 </div>
 {{{body}}}
 </body>

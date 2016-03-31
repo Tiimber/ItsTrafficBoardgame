@@ -12,7 +12,7 @@ var clearOldFiles = require('../tools/clear-old-files');
 
 /* GET home page. */
 router.get('/', function (req, res, next) {
-    res.render('index', {title: 'itsTraffic Board Generator'});
+    res.render('start', {});
 });
 
 /* Start - choose mapfile */

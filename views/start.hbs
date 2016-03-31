@@ -1,5 +1,19 @@
-<h1>Choose map file (*.osm)</h1>
+<div class="current-page-id">start</div>
+
+<h1>ItsTraffic Boardgame Generator</h1>
+<div>To get started, you have the following options:</div>
+
+<h2>Upload map file</h2>
+<div>Choose file exported from <a class="inline" href="http://www.openstreetmap.org/">OpenStreetMap</a> (.osm file)</div>
 <form action="preview" method="post" enctype="multipart/form-data">
     <input type="file" name="map" /><br/>
     <input type="submit" value="Preview and adjust"/>
 </form>
+
+<h2>Load map previously saved through this page</h2>
+<div>These are locally saved on your computer only</div>
+<button onclick="load();">Load map from memory</button>
+
+<h2>Import raw map data</h2>
+<div>This is something you have earlier saved, and are in form of a big chunk of JSON data</div>
+<button onclick="importData();">Load map raw data</button>
