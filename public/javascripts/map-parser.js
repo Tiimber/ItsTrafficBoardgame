@@ -38,9 +38,25 @@ var nextClick = null;
 var rollingUniqueId = 0;
 
 var targetNumberOfMapEntrances = 3;
+var interestingNodeGroups = [
+    {
+        name: 'trafficSignals',
+        icon: '/images/trafficLight_debug.png'
+    },
+    {
+        name: 'food',
+        icon: '/images/restaurant_debug.png'
+    },
+    {
+        name: 'shop',
+        icon: '/images/shop_debug.png'
+    }
+];
+var showInterestingNodes = false;
 
 var wayPartColor = 0xffffff;
 var nodeColor = 0xccccff;
+var interestingNodeColor = 0x66cc66;
 
 var calculateRatioX = 37.0;
 //var calculateRatioX = 21.0; // To make it square (but stretch it)
@@ -67,6 +83,8 @@ function parseMapData() {
 
         globalMapData.bounds.width = Math.abs(globalMapData.bounds.maxX - globalMapData.bounds.minX);
         globalMapData.bounds.height = Math.abs(globalMapData.bounds.maxY - globalMapData.bounds.minY);
+        globalMapData.bounds.centerX = globalMapData.bounds.minX + (globalMapData.bounds.maxX - globalMapData.bounds.minX) / 2;
+        globalMapData.bounds.centerY = globalMapData.bounds.minY + (globalMapData.bounds.maxY - globalMapData.bounds.minY) / 2;
 
         var hashTypes = ['node', 'way', 'relation'];
         for (var typeIndex = 0; typeIndex < hashTypes.length; typeIndex++) {
@@ -602,7 +620,15 @@ function setUploadDownloadState() {
 }
 
 function nextStep() {
-    alert('TODO');
+    var currentPageIdNode = document.querySelector('.current-page-id');
+    var page = currentPageIdNode.innerHTML;
+    switch (page) {
+        case 'preview':
+            currentPageIdNode.innerHTML = 'preview-2';
+            showInterestingNodes = true;
+            cleanupAndRerender();
+            break;
+    }
 }
 
 function setNextStepState() {
@@ -875,7 +901,8 @@ function addNodeObj(node, scene, way) {
 
     if (!(node.$.id in placedOutSphereIds)) {
         //// Create the node point
-        var nodeMaterial = new THREE.MeshBasicMaterial({color: nodeColor});
+        var colorForNode = showInterestingNodes ? wayPartColor : nodeColor;
+        var nodeMaterial = new THREE.MeshBasicMaterial({color: colorForNode});
         var geometry = new THREE.SphereGeometry(wayHeightMap / 2.0, 20, 20); // Y should be way size
         var sphere = new THREE.Mesh(geometry, nodeMaterial);
         sphere.position.x = node.$.lon;
@@ -938,7 +965,7 @@ function addWays() {
     var ways = globalMapData.way;
     for (var wayId in ways) {
         var way = ways[wayId];
-        if (way.tag && (way.tag.highway === 'residential' || way.tag.highway === 'pedestrian')) {
+        if (way.tag && (way.tag.highway === 'residential' || way.tag.highway === 'pedestrian' || way.tag.highway === 'primary' || way.tag.highway === 'secondary' || way.tag.highway === 'tertiary')) {
             way.wayParts = [];
             way.nodeObjects = [];
 
@@ -962,6 +989,8 @@ function addWays() {
                 addWayPart(wayPositionData, scene, way);
                 previousNode = currentNode;
             }
+        } else {
+            //console.log(way.tag && way.tag.highway);
         }
     }
 
@@ -969,6 +998,38 @@ function addWays() {
     addBuildings();
     addLogo();
     gatherNodesOfInterest();
+
+    if (showInterestingNodes) {
+        var rerenderDebounced = debounce(window.render, 50);
+        // The nodes we are interested in...
+        for (var nodeGroupIndex = 0; nodeGroupIndex < interestingNodeGroups.length; nodeGroupIndex++) {
+            var interestingNodeGroup = interestingNodeGroups[nodeGroupIndex];
+            var interestingNodes = globalMapData.nodesOfInterest[interestingNodeGroup.name];
+            for (var nodeIndex = 0; nodeIndex < interestingNodes.length; nodeIndex++) {
+                var node = interestingNodes[nodeIndex];
+                //var nodeMaterial = new THREE.MeshBasicMaterial({color: interestingNodeColor});
+                //var geometry = new THREE.SphereGeometry(wayHeightMap / 2.0, 20, 20); // Y should be way size
+                //var sphere = new THREE.Mesh(geometry, nodeMaterial);
+                //sphere.position.x = node.$.lon;
+                //sphere.position.y = node.$.lat;
+                //sphere.originType = 'nodeOfInterest';
+                //sphere.originId = node.$.id;
+                //scene.add(sphere);
+
+
+                var image = new THREE.TextureLoader().load(interestingNodeGroup.icon, rerenderDebounced);
+                var material = new THREE.SpriteMaterial({map: image});
+                var sprite = new THREE.Sprite(material);
+                sprite.position.x = node.$.lon;
+                sprite.position.y = node.$.lat;
+                sprite.scale.x = globalMapData.bounds.width / resolution * 20;
+                sprite.scale.y = globalMapData.bounds.height / resolution * 20;
+                sprite.originType = 'nodeOfInterest';
+                sprite.originId = node.$.id;
+                scene.add(sprite);
+            }
+        }
+    }
 }
 
 function hasTagWithValues(tags, key, values) {
@@ -1012,38 +1073,40 @@ function gatherNodesOfInterest() {
     globalMapData.nodesOfInterest = nodeIds.reduce(
         function (previous, key) {
             var node = globalMapData.node[key];
-            if ('tag' in node && Object.getOwnPropertyNames(node.tag).length) {
-                var tags = node.tag;
-                var addToType = 'other';
-                // Detect what type it is
-                if (isShop(tags)) {
-                    addToType = 'shop';
-                } else if (isTrafficSignals(tags)) {
-                    addToType = 'trafficSignals';
-                } else if (isCrossing(tags)) {
-                    addToType = 'crossing';
-                } else if (isRestaurant(tags)) {
-                    addToType = 'food';
-                } else if (isTree(tags)) {
-                    addToType = 'tree';
-                } else if (isPublicTransport(tags)) {
-                    addToType = 'publicTransport';
-                } else if (isHotel(tags)) {
-                    addToType = 'hotel';
-                } else if (isATM(tags)) {
-                    addToType = 'atm';
-                } else if (isParking(tags)) {
-                    addToType = 'parking';
-                } else {
-                    // Other - uncomment to print
-                    //console.log(node.tag);
-                }
+            if (!isNodeOutside(node.$.lon, node.$.lat)) {
+                if ('tag' in node && Object.getOwnPropertyNames(node.tag).length) {
+                    var tags = node.tag;
+                    var addToType = 'other';
+                    // Detect what type it is
+                    if (isShop(tags)) {
+                        addToType = 'shop';
+                    } else if (isTrafficSignals(tags)) {
+                        addToType = 'trafficSignals';
+                    } else if (isCrossing(tags)) {
+                        addToType = 'crossing';
+                    } else if (isRestaurant(tags)) {
+                        addToType = 'food';
+                    } else if (isTree(tags)) {
+                        addToType = 'tree';
+                    } else if (isPublicTransport(tags)) {
+                        addToType = 'publicTransport';
+                    } else if (isHotel(tags)) {
+                        addToType = 'hotel';
+                    } else if (isATM(tags)) {
+                        addToType = 'atm';
+                    } else if (isParking(tags)) {
+                        addToType = 'parking';
+                    } else {
+                        // Other - uncomment to print
+                        //console.log(node.tag);
+                    }
 
-                // Add it
-                if (previous[addToType]) {
-                    previous[addToType].push(node);
-                } else {
-                    previous[addToType] = [node];
+                    // Add it
+                    if (previous[addToType]) {
+                        previous[addToType].push(node);
+                    } else {
+                        previous[addToType] = [node];
+                    }
                 }
             }
             return previous;
