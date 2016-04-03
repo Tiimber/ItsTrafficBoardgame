@@ -65,7 +65,7 @@ var shortcutKeyDown = false;
 
 var smallMapMove;
 var largeMapMove;
-var mapEntrances;
+var mapEntranceNodes;
 
 function parseMapData() {
     var data = window.mapData;
@@ -81,11 +81,6 @@ function parseMapData() {
             minY: data.bounds[0].$.maxlat
         };
 
-        globalMapData.bounds.width = Math.abs(globalMapData.bounds.maxX - globalMapData.bounds.minX);
-        globalMapData.bounds.height = Math.abs(globalMapData.bounds.maxY - globalMapData.bounds.minY);
-        globalMapData.bounds.centerX = globalMapData.bounds.minX + (globalMapData.bounds.maxX - globalMapData.bounds.minX) / 2;
-        globalMapData.bounds.centerY = globalMapData.bounds.minY + (globalMapData.bounds.maxY - globalMapData.bounds.minY) / 2;
-
         var hashTypes = ['node', 'way', 'relation'];
         for (var typeIndex = 0; typeIndex < hashTypes.length; typeIndex++) {
             var type = hashTypes[typeIndex];
@@ -97,6 +92,11 @@ function parseMapData() {
             globalMapData[type] = list;
         }
     }
+
+    globalMapData.bounds.width = Math.abs(globalMapData.bounds.maxX - globalMapData.bounds.minX);
+    globalMapData.bounds.height = Math.abs(globalMapData.bounds.maxY - globalMapData.bounds.minY);
+    globalMapData.bounds.centerX = globalMapData.bounds.minX + (globalMapData.bounds.maxX - globalMapData.bounds.minX) / 2;
+    globalMapData.bounds.centerY = globalMapData.bounds.minY + (globalMapData.bounds.maxY - globalMapData.bounds.minY) / 2;
 
     // Calculate how much a small and big move should be when moving nodes
     smallMapMove = Math.round(globalMapData.bounds.width / (resolution / 4));
@@ -113,7 +113,7 @@ function parseMapData() {
 }
 
 function presentInfo() {
-    var fullInfo = 'Map entrances/exits: <span class="bold ' + (mapEntrances === targetNumberOfMapEntrances ? 'green' : 'red') + '">' + mapEntrances + '</span> (Expected: ' + targetNumberOfMapEntrances + ')<br/>';
+    var fullInfo = 'Map entrances/exits: <span class="bold ' + (mapEntranceNodes.length === targetNumberOfMapEntrances ? 'green' : 'red') + '">' + mapEntranceNodes.length + '</span> (Expected: ' + targetNumberOfMapEntrances + ')<br/>';
     bootbox.dialog({
         title: 'Map summary',
         message: fullInfo
@@ -384,6 +384,8 @@ function getInfo(type, id, wayPartId) {
             data += ' <a class="inline fa fa-link" title="Create a way between this and another node" onclick="createWayFrom(\'' + type + '\', \'' + id + '\')"></a>'; // Create a new way from this node to another one
         }
     }
+
+    data += ' (' + id + ')';
     return data;
 }
 
@@ -636,7 +638,7 @@ function setNextStepState() {
     var page = document.querySelector('.current-page-id').innerHTML;
     switch (page) {
         case 'preview':
-            nextStepButton.dataset['disabled'] = (mapEntrances === targetNumberOfMapEntrances ? 'false' : 'true');
+            nextStepButton.dataset['disabled'] = (mapEntranceNodes.length === targetNumberOfMapEntrances ? 'false' : 'true');
             nextStepButton.title = 'Edit nodes and spots';
             break;
         case 'start':
@@ -958,8 +960,44 @@ function addLogo() {
 */
 }
 
+function getDistance(x1, y1, x2, y2) {
+    return Math.sqrt(Math.pow(Math.abs(x1 - x2), 2) + Math.pow(Math.abs(y1 - y2), 2));
+}
+
+function getAverage(values) {
+    if (values) {
+        var sum = values.reduce(function(a, b) { return a + b; });
+        return sum / values.length;
+    }
+}
+
+function collect4WayCrossings() {
+    globalMapData.trafficLightCandidates = [];
+    for (var nodeId in globalMapData.node) {
+        if (globalMapData.trafficLightCandidates.indexOf(nodeId) === -1) {
+            var node = globalMapData.node[nodeId];
+            if (node.wayObjects && node.wayObjects.length === 4) {
+                var entrancePointsDistances = [];
+                mapEntranceNodes.forEach(function(entranceNodeRef) {
+                    var entranceNode = getNode(entranceNodeRef.$.ref);
+                    entrancePointsDistances.push(getDistance(node.$.lon, node.$.lat, entranceNode.$.lon, entranceNode.$.lat));
+                });
+
+                var nodeInfo = {
+                    id: nodeId,
+                    avgDistanceFromEntries: getAverage(entrancePointsDistances),
+                    distanceFromCenter: getDistance(globalMapData.bounds.centerX, globalMapData.bounds.centerY, node.$.lon, node.$.lat),
+                    maxDistanceFromEntry: Math.max.apply(null, entrancePointsDistances),
+                    minDistanceFromEntry: Math.min.apply(null, entrancePointsDistances)
+                };
+                globalMapData.trafficLightCandidates.push(nodeInfo);
+            }
+        }
+    }
+}
+
 function addWays() {
-    mapEntrances = 0;
+    mapEntranceNodes = [];
     currentKeptBackupData = JSON.parse(JSON.stringify(globalMapData));
 
     var ways = globalMapData.way;
@@ -969,19 +1007,20 @@ function addWays() {
             way.wayParts = [];
             way.nodeObjects = [];
 
-            var entranceExitCount = removeOutsideNodes(way.nd);
+            var entranceNodes = removeOutsideNodes(way.nd);
             // All nodes were outside, remove this way
             if (!way.nd.length) {
                 delete globalMapData.way[wayId];
                 continue;
             }
 
-            mapEntrances += entranceExitCount;
+            if (entranceNodes && entranceNodes.length) {
+                mapEntranceNodes = [].concat(mapEntranceNodes, entranceNodes);
+            }
 
             var previousNode = getNode(way.nd[0].$.ref);
-            addNodeObj(previousNode, scene, way);
-
             for (var i = 1; i < way.nd.length; i++) {
+                addNodeObj(previousNode, scene, way);
                 var currentNode = getNode(way.nd[i].$.ref);
                 addNodeObj(currentNode, scene, way);
 
@@ -998,6 +1037,7 @@ function addWays() {
     addBuildings();
     addLogo();
     gatherNodesOfInterest();
+    collect4WayCrossings();
 
     if (showInterestingNodes) {
         var rerenderDebounced = debounce(window.render, 50);
@@ -1007,16 +1047,6 @@ function addWays() {
             var interestingNodes = globalMapData.nodesOfInterest[interestingNodeGroup.name];
             for (var nodeIndex = 0; nodeIndex < interestingNodes.length; nodeIndex++) {
                 var node = interestingNodes[nodeIndex];
-                //var nodeMaterial = new THREE.MeshBasicMaterial({color: interestingNodeColor});
-                //var geometry = new THREE.SphereGeometry(wayHeightMap / 2.0, 20, 20); // Y should be way size
-                //var sphere = new THREE.Mesh(geometry, nodeMaterial);
-                //sphere.position.x = node.$.lon;
-                //sphere.position.y = node.$.lat;
-                //sphere.originType = 'nodeOfInterest';
-                //sphere.originId = node.$.id;
-                //scene.add(sphere);
-
-
                 var image = new THREE.TextureLoader().load(interestingNodeGroup.icon, rerenderDebounced);
                 var material = new THREE.SpriteMaterial({map: image});
                 var sprite = new THREE.Sprite(material);
@@ -1112,6 +1142,17 @@ function gatherNodesOfInterest() {
             return previous;
         }, {}
     );
+
+    // Clean up traffic lights (only valid if we have 4 wayObjects to it...
+    var trafficSignals = globalMapData.nodesOfInterest.trafficSignals;
+    if (trafficSignals) {
+        for (var i = 0; i < trafficSignals.length; i++) {
+            if (!trafficSignals[i].wayObjects || trafficSignals[i].wayObjects.length !== 4) {
+                trafficSignals.splice(i, 1);
+                i--;
+            }
+        }
+    }
 }
 
 function isNodeOutside(lon, lat) {
@@ -1148,8 +1189,15 @@ function removeOutsideNodes(nodes) {
         nodes.splice(nodes.length - (numberEndNodesOutside - 1));
     }
 
-    // Return 0-2 depending on if any nodes are outside and if so, how many endpoints are exiting or entering the map
-    return !!numberEndNodesOutside + !!numberBeginningNodesOutside;
+    var entranceNodes = [];
+    if (numberBeginningNodesOutside) {
+        entranceNodes.push(nodes[0]);
+    }
+    if (numberEndNodesOutside) {
+        entranceNodes.push(nodes[nodes.length - 1]);
+    }
+
+    return entranceNodes;
 }
 
 function getNode(id) {
