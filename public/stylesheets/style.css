@@ -107,3 +107,63 @@ a.negative {
     width: 100%;
     height: 15em;
 }
+
+.visible {
+    display: block;
+}
+
+.invisible {
+    display: none;
+}
+
+.icon-traffic-light {
+    background: url(/images/trafficLight.png);
+}
+
+.icon-shop {
+    background: url(/images/shop.png);
+}
+
+.icon-restaurant {
+    background: url(/images/restaurant.png);
+}
+
+
+#interestingNodesToolbar {
+    display: flex;
+    padding: 10px;
+}
+
+#interestingNodesToolbar > * {
+    margin: 0 20px;
+}
+
+.interesting-node-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+.interesting-node-icon {
+    width: 50px;
+    height: 50px;
+    background-size: cover;
+}
+
+.interesting-node-text {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.interesting-node-text-actual {
+    color: darkgreen;
+}
+
+.interesting-node-text-actual[data-expected="false"] {
+    color: #cc0000;
+}
+
+.interesting-node-text-divider {
+    margin: 0 1em;
+}

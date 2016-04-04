@@ -1,3 +1,33 @@
 <div class="current-page-id">preview</div>
 <script type="application/javascript" src="{{mapDataScript}}"></script>
 <script>parseMapData();</script>
+
+<div id="dataArea" class="bottom"></div>
+<div id="interestingNodesToolbar" class="bottom invisible">
+    <div class="interesting-node-wrapper" data-nodetype="traffic-light">
+        <div class="interesting-node-icon icon-traffic-light"></div>
+        <div class="interesting-node-text">
+            <span class="interesting-node-text-actual" data-expected="false"></span>
+            <span class="interesting-node-text-divider">/</span>
+            <span class="interesting-node-text-expected"></span>
+        </div>
+    </div>
+
+    <div class="interesting-node-wrapper" data-nodetype="restaurant">
+        <div class="interesting-node-icon icon-restaurant"></div>
+        <div class="interesting-node-text">
+            <span class="interesting-node-text-actual" data-expected="false"></span>
+            <span class="interesting-node-text-divider">/</span>
+            <span class="interesting-node-text-expected"></span>
+        </div>
+    </div>
+
+    <div class="interesting-node-wrapper" data-nodetype="shop">
+        <div class="interesting-node-icon icon-shop"></div>
+        <div class="interesting-node-text">
+            <span class="interesting-node-text-actual" data-expected="false"></span>
+            <span class="interesting-node-text-divider">/</span>
+            <span class="interesting-node-text-expected"></span>
+        </div>
+    </div>
+</div>

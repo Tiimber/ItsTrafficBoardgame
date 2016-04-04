@@ -41,15 +41,21 @@ var targetNumberOfMapEntrances = 3;
 var interestingNodeGroups = [
     {
         name: 'trafficSignals',
-        icon: '/images/trafficLight_debug.png'
+        icon: '/images/trafficLight_debug.png',
+        domElementSelector: '[data-nodetype="traffic-light"]',
+        target: 6
     },
     {
         name: 'food',
-        icon: '/images/restaurant_debug.png'
+        icon: '/images/restaurant_debug.png',
+        domElementSelector: '[data-nodetype="restaurant"]',
+        target: 2
     },
     {
         name: 'shop',
-        icon: '/images/shop_debug.png'
+        icon: '/images/shop_debug.png',
+        domElementSelector: '[data-nodetype="shop"]',
+        target: 3
     }
 ];
 var showInterestingNodes = false;
@@ -105,7 +111,6 @@ function parseMapData() {
     initCanvas();
     addWays();
     window.render();
-    placeDataArea();
     setZoomStates();
     setSaveLoadState();
     setUploadDownloadState();
@@ -156,14 +161,6 @@ function setZoomLevel(level) {
     }
 }
 
-
-function placeDataArea() {
-    var dataArea = document.createElement('div');
-    dataArea.id = 'dataArea';
-    dataArea.className = 'bottom';
-    document.body.appendChild(dataArea);
-}
-
 function deselectHighlights() {
     for (var i = 0; i < highlighted.length; i++) {
         var object = highlighted[i].object || highlighted[i];
@@ -207,95 +204,120 @@ function getTypeHTML(type) {
     }
 }
 
+function showInterestingNodesToolbar() {
+    var dataArea = document.querySelector('#dataArea');
+    dataArea.classList.add('invisible');
+
+    var interestingNodesToolbar = document.querySelector('#interestingNodesToolbar');
+    interestingNodesToolbar.classList.remove('invisible');
+    interestingNodesToolbar.classList.add('visible');
+    updateInterestingNodesToolbarInto();
+}
+
+function updateInterestingNodesToolbarInto() {
+    interestingNodeGroups.forEach(function(interestingNodeGroup) {
+        var domNode = document.querySelector(interestingNodeGroup.domElementSelector);
+        var actual = domNode.querySelector('.interesting-node-text-actual');
+        var expected = domNode.querySelector('.interesting-node-text-expected');
+        var count = interestingNodeGroup.count;
+        var target = interestingNodeGroup.target;
+        actual.innerHTML = count;
+        actual.dataset['expected'] = count === target;
+        expected.innerHTML = target;
+    });
+}
+
 function updatePrint() {
     printInfo.apply(this, lastPrintInfo);
 }
 
 var lastPrintInfo = [];
 function printInfo(title, data, cancelBtn, okCb) {
-    var i;
-    if (nextClick) {
-        if (nextClick.type === 'move') {
-            for (i = 0; i < data.length; i++) {
-                var mergeWith = data[i].object || data[i];
-                if (mergeWith.originType === 'node' && mergeWith.originId !== nextClick.obj) {
-                    title = 'Confirm moving first node into second?';
-                    cancelBtn = true;
-                    data = [].concat(highlighted);
-                    data.push(mergeWith);
-                    okCb = function () {
-                        saveBackupData();
-                        mergeNodes(data)
-                    };
+    if (!showInterestingNodes) {
+        var i;
+        if (nextClick) {
+            if (nextClick.type === 'move') {
+                for (i = 0; i < data.length; i++) {
+                    var mergeWith = data[i].object || data[i];
+                    if (mergeWith.originType === 'node' && mergeWith.originId !== nextClick.obj) {
+                        title = 'Confirm moving first node into second?';
+                        cancelBtn = true;
+                        data = [].concat(highlighted);
+                        data.push(mergeWith);
+                        okCb = function () {
+                            saveBackupData();
+                            mergeNodes(data)
+                        };
+                    }
                 }
-            }
-        } else if (nextClick.type === 'createWay') {
-            for (i = 0; i < data.length; i++) {
-                var createTo = data[i].object || data[i];
-                if (createTo.originType === 'node' && createTo.originId !== nextClick.obj) {
-                    title = 'Confirm creating a new way between the two nodes?';
-                    cancelBtn = true;
-                    data = [].concat(highlighted);
-                    data.push(createTo);
-                    okCb = function () {
-                        saveBackupData();
-                        createWayBetweenNodes(data)
-                    };
+            } else if (nextClick.type === 'createWay') {
+                for (i = 0; i < data.length; i++) {
+                    var createTo = data[i].object || data[i];
+                    if (createTo.originType === 'node' && createTo.originId !== nextClick.obj) {
+                        title = 'Confirm creating a new way between the two nodes?';
+                        cancelBtn = true;
+                        data = [].concat(highlighted);
+                        data.push(createTo);
+                        okCb = function () {
+                            saveBackupData();
+                            createWayBetweenNodes(data)
+                        };
+                    }
                 }
             }
         }
+
+        if (shortcutKeyDown && okCb) {
+            okCb();
+            return;
+        }
+
+        // Save last info
+        lastPrintInfo = [].slice.call(arguments, 0);
+
+        nextClick = null;
+        var dataArea = document.querySelector('#dataArea');
+        dataArea.innerHTML = '';
+
+        var titleObj = document.createElement('div');
+        titleObj.innerHTML = title;
+        dataArea.appendChild(titleObj);
+
+        var colorCounters = {waypart: 0, node: 0};
+        for (i = 0; i < data.length; i++) {
+            var itemData = document.createElement('div');
+            itemData.style.marginLeft = '1em';
+            var object = data[i].object || data[i];
+            var color = getRgbString(getHighlightColor(object, colorCounters));
+            itemData.innerHTML = getTypeHTML(object.originType) + '<span class="fa fa-square square" style="color: ' + color + ';"></span>' + getInfo(object.originType, object.originId, object.originWPId);
+            dataArea.appendChild(itemData);
+        }
+
+        if (okCb) {
+            var okBtnObj = document.createElement('a');
+            okBtnObj.className = 'positive';
+            okBtnObj.id = 'confirm-action';
+            okBtnObj.innerHTML = '<span class="underline">C</span>onfirm!';
+            okBtnObj.onclick = okCb;
+            dataArea.appendChild(okBtnObj);
+        }
+
+        if (cancelBtn) {
+            var cancelBtnObj = document.createElement('a');
+            cancelBtnObj.className = 'negative';
+            cancelBtnObj.id = 'abort-action';
+            cancelBtnObj.innerHTML = '<span class="underline">A</span>bort';
+            cancelBtnObj.onclick = function () {
+                printInfo('', []);
+            };
+            dataArea.appendChild(cancelBtnObj);
+        }
+
+        deselectHighlights();
+        highlighted = data;
+        selectHighlights();
+        window.render();
     }
-
-    if (shortcutKeyDown && okCb) {
-        okCb();
-        return;
-    }
-
-    // Save last info
-    lastPrintInfo = [].slice.call(arguments, 0);
-
-    nextClick = null;
-    var dataArea = document.querySelector('#dataArea');
-    dataArea.innerHTML = '';
-
-    var titleObj = document.createElement('div');
-    titleObj.innerHTML = title;
-    dataArea.appendChild(titleObj);
-
-    var colorCounters = {waypart: 0, node: 0};
-    for (i = 0; i < data.length; i++) {
-        var itemData = document.createElement('div');
-        itemData.style.marginLeft = '1em';
-        var object = data[i].object || data[i];
-        var color = getRgbString(getHighlightColor(object, colorCounters));
-        itemData.innerHTML = getTypeHTML(object.originType) + '<span class="fa fa-square square" style="color: ' + color + ';"></span>' + getInfo(object.originType, object.originId, object.originWPId);
-        dataArea.appendChild(itemData);
-    }
-
-    if (okCb) {
-        var okBtnObj = document.createElement('a');
-        okBtnObj.className = 'positive';
-        okBtnObj.id = 'confirm-action';
-        okBtnObj.innerHTML = '<span class="underline">C</span>onfirm!';
-        okBtnObj.onclick = okCb;
-        dataArea.appendChild(okBtnObj);
-    }
-
-    if (cancelBtn) {
-        var cancelBtnObj = document.createElement('a');
-        cancelBtnObj.className = 'negative';
-        cancelBtnObj.id = 'abort-action';
-        cancelBtnObj.innerHTML = '<span class="underline">A</span>bort';
-        cancelBtnObj.onclick = function () {
-            printInfo('', []);
-        };
-        dataArea.appendChild(cancelBtnObj);
-    }
-
-    deselectHighlights();
-    highlighted = data;
-    selectHighlights();
-    window.render();
 }
 
 function getTags(item) {
@@ -626,10 +648,32 @@ function nextStep() {
     var page = currentPageIdNode.innerHTML;
     switch (page) {
         case 'preview':
+            printInfo('', []);
             currentPageIdNode.innerHTML = 'preview-2';
             showInterestingNodes = true;
             cleanupAndRerender();
+            setNextStepState();
+            showInterestingNodesToolbar();
             break;
+    }
+}
+
+function areCriteriasMet() {
+    var nextStepButton = document.querySelector('.top .next-step');
+    var page = document.querySelector('.current-page-id').innerHTML;
+    switch (page) {
+        case 'preview-2':
+            var anyInterestingNodeGroupNotMet = false;
+            interestingNodeGroups.forEach(function (interestingNodeGroup) {
+                if (interestingNodeGroup.count !== interestingNodeGroup.target) {
+                    anyInterestingNodeGroupNotMet = true;
+                }
+            });
+            return !anyInterestingNodeGroupNotMet;
+        case 'preview':
+            return mapEntranceNodes.length === targetNumberOfMapEntrances;
+        default:
+            return true;
     }
 }
 
@@ -637,8 +681,12 @@ function setNextStepState() {
     var nextStepButton = document.querySelector('.top .next-step');
     var page = document.querySelector('.current-page-id').innerHTML;
     switch (page) {
+        case 'preview-2':
+            nextStepButton.dataset['disabled'] = areCriteriasMet() ? 'false' : 'true';
+            nextStepButton.title = 'TODO - Give title';
+            break;
         case 'preview':
-            nextStepButton.dataset['disabled'] = (mapEntranceNodes.length === targetNumberOfMapEntrances ? 'false' : 'true');
+            nextStepButton.dataset['disabled'] = areCriteriasMet() ? 'false' : 'true';
             nextStepButton.title = 'Edit nodes and spots';
             break;
         case 'start':
@@ -856,10 +904,12 @@ function clickObject(object) {
 }
 
 function mouseOn(scene, camera, raycaster, pos) {
-    raycaster.setFromCamera(pos, camera);
-    var intersects = raycaster.intersectObjects(scene.children);
-    var title = 'Items for clicked position "' + pos.x.toFixed(3) + ', ' + pos.y.toFixed(3) + '":';
-    printInfo(title, intersects);
+    if (!showInterestingNodes) {
+        raycaster.setFromCamera(pos, camera);
+        var intersects = raycaster.intersectObjects(scene.children);
+        var title = 'Items for clicked position "' + pos.x.toFixed(3) + ', ' + pos.y.toFixed(3) + '":';
+        printInfo(title, intersects);
+    }
 }
 
 function highlightWayAndNodes(wayId) {
@@ -1045,6 +1095,7 @@ function addWays() {
         for (var nodeGroupIndex = 0; nodeGroupIndex < interestingNodeGroups.length; nodeGroupIndex++) {
             var interestingNodeGroup = interestingNodeGroups[nodeGroupIndex];
             var interestingNodes = globalMapData.nodesOfInterest[interestingNodeGroup.name];
+            interestingNodeGroup.count = 0;
             for (var nodeIndex = 0; nodeIndex < interestingNodes.length; nodeIndex++) {
                 var node = interestingNodes[nodeIndex];
                 var image = new THREE.TextureLoader().load(interestingNodeGroup.icon, rerenderDebounced);
@@ -1057,6 +1108,7 @@ function addWays() {
                 sprite.originType = 'nodeOfInterest';
                 sprite.originId = node.$.id;
                 scene.add(sprite);
+                interestingNodeGroup.count++;
             }
         }
     }
