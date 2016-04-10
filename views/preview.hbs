@@ -4,7 +4,7 @@
 
 <div id="dataArea" class="bottom"></div>
 <div id="interestingNodesToolbar" class="bottom invisible">
-    <div class="interesting-node-wrapper" data-nodetype="traffic-light">
+    <div class="interesting-node-wrapper" onclick="selectMapNodeType();" data-nodetype="traffic-light">
         <div class="interesting-node-icon icon-traffic-light"></div>
         <div class="interesting-node-text">
             <span class="interesting-node-text-actual" data-expected="false"></span>
@@ -13,7 +13,7 @@
         </div>
     </div>
 
-    <div class="interesting-node-wrapper" data-nodetype="restaurant">
+    <div class="interesting-node-wrapper" onclick="selectMapNodeType();" data-nodetype="restaurant">
         <div class="interesting-node-icon icon-restaurant"></div>
         <div class="interesting-node-text">
             <span class="interesting-node-text-actual" data-expected="false"></span>
@@ -22,12 +22,20 @@
         </div>
     </div>
 
-    <div class="interesting-node-wrapper" data-nodetype="shop">
+    <div class="interesting-node-wrapper" onclick="selectMapNodeType();" data-nodetype="shop">
         <div class="interesting-node-icon icon-shop"></div>
         <div class="interesting-node-text">
             <span class="interesting-node-text-actual" data-expected="false"></span>
             <span class="interesting-node-text-divider">/</span>
             <span class="interesting-node-text-expected"></span>
         </div>
+    </div>
+
+    <div class="interesting-node-wrapper" data-nodeseparator></div>
+
+    <div class="interesting-node-wrapper" data-nodeinfo>
+        <div>Click icon to the left to select/deselect it.</div>
+        <div id="nodeInfoIfNoNodeSelected">Click icon on the map for options.</div>
+        <div id="nodeInfoIfNodeSelected">Click on the map to place a <span id="nodeTypeIfNodeSelected"></span>.</div>
     </div>
 </div>

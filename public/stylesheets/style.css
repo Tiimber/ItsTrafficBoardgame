@@ -134,8 +134,12 @@ a.negative {
     padding: 10px;
 }
 
-#interestingNodesToolbar > * {
+#interestingNodesToolbar > *:not([data-nodetype]) {
     margin: 0 20px;
+}
+
+#interestingNodesToolbar > [data-nodetype] {
+    padding: 0 20px;
 }
 
 .interesting-node-wrapper {
@@ -166,4 +170,22 @@ a.negative {
 
 .interesting-node-text-divider {
     margin: 0 1em;
+}
+
+[data-nodeseparator] {
+    width: 1px;
+    background-color: darkgray;
+}
+
+[data-nodeinfo] {
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+[data-nodetype][data-selected="true"] {
+    background-color: lightblue;
+}
+
+#nodeTypeIfNodeSelected {
+    font-weight: bold;
 }

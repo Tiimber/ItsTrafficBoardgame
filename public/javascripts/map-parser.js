@@ -43,22 +43,27 @@ var interestingNodeGroups = [
         name: 'trafficSignals',
         icon: '/images/trafficLight_debug.png',
         domElementSelector: '[data-nodetype="traffic-light"]',
+        type: 'traffic-light',
         target: 6
     },
     {
         name: 'food',
         icon: '/images/restaurant_debug.png',
         domElementSelector: '[data-nodetype="restaurant"]',
-        target: 2
+        type: 'restaurant',
+        target: 3
     },
     {
         name: 'shop',
         icon: '/images/shop_debug.png',
         domElementSelector: '[data-nodetype="shop"]',
+        type: 'shop',
         target: 3
     }
 ];
 var showInterestingNodes = false;
+var clickOnMapToSelectNode = true;
+var nodeTypeSelected = null;
 
 var wayPartColor = 0xffffff;
 var nodeColor = 0xccccff;
@@ -204,6 +209,22 @@ function getTypeHTML(type) {
     }
 }
 
+function selectMapNodeType() {
+    var target = event.target;
+    while (target !== document.body && !target.dataset['nodetype']) {
+        target = target.parentNode;
+    }
+    var targetType = target.dataset['nodetype'];
+    if (targetType) {
+        if (nodeTypeSelected === targetType) {
+            nodeTypeSelected = null;
+        } else {
+            nodeTypeSelected = targetType;
+        }
+        updateInterestingNodesToolbarInfo();
+    }
+}
+
 function showInterestingNodesToolbar() {
     var dataArea = document.querySelector('#dataArea');
     dataArea.classList.add('invisible');
@@ -211,20 +232,28 @@ function showInterestingNodesToolbar() {
     var interestingNodesToolbar = document.querySelector('#interestingNodesToolbar');
     interestingNodesToolbar.classList.remove('invisible');
     interestingNodesToolbar.classList.add('visible');
-    updateInterestingNodesToolbarInto();
+    updateInterestingNodesToolbarInfo();
 }
 
-function updateInterestingNodesToolbarInto() {
+function updateInterestingNodesToolbarInfo() {
     interestingNodeGroups.forEach(function(interestingNodeGroup) {
         var domNode = document.querySelector(interestingNodeGroup.domElementSelector);
         var actual = domNode.querySelector('.interesting-node-text-actual');
         var expected = domNode.querySelector('.interesting-node-text-expected');
         var count = interestingNodeGroup.count;
         var target = interestingNodeGroup.target;
+        domNode.dataset['selected'] = nodeTypeSelected === interestingNodeGroup.type;
         actual.innerHTML = count;
         actual.dataset['expected'] = count === target;
         expected.innerHTML = target;
     });
+
+    clickOnMapToSelectNode = !nodeTypeSelected;
+    document.querySelector('#nodeInfoIfNoNodeSelected').style.display = clickOnMapToSelectNode ? 'block' : 'none';
+    document.querySelector('#nodeInfoIfNodeSelected').style.display = nodeTypeSelected ? 'block' : 'none';
+    if (nodeTypeSelected) {
+        document.querySelector('#nodeTypeIfNodeSelected').innerHTML = nodeTypeSelected;
+    }
 }
 
 function updatePrint() {
@@ -720,6 +749,7 @@ function cleanupAndRerender() {
     }
     printInfo('', []);
     addWays();
+    updateInterestingNodesToolbarInfo();
     window.render();
     setNextStepState();
 }
@@ -862,11 +892,14 @@ function initCanvas() {
     var canvasHeight = renderer.domElement.offsetHeight - 1;
     var canvasWidth = renderer.domElement.offsetWidth;
     renderer.domElement.addEventListener('mousedown', function (event) {
+        var pctX = ((event.pageX - canvasX) / canvasWidth);
+        var pctY = ((event.pageY - canvasY) / canvasHeight);
         var relativePoint = new THREE.Vector2(
-            ((event.pageX - canvasX) / canvasWidth) * 2 - 1,
-            -((event.pageY - canvasY) / canvasHeight) * 2 + 1
+            pctX * 2 - 1,
+            -pctY * 2 + 1
         );
-        mouseOn(scene, camera, raycaster, relativePoint);
+        var relativePointAbsolute = {x: pctX, y: pctY};
+        mouseOn(camera, raycaster, relativePoint, relativePointAbsolute);
     }, false);
 
     document.addEventListener('keydown', function(event) {
@@ -903,12 +936,39 @@ function clickObject(object) {
     object.dispatchEvent(evt);
 }
 
-function mouseOn(scene, camera, raycaster, pos) {
+function mouseOn(camera, raycaster, pos, relativePos) {
+    var intersects;
     if (!showInterestingNodes) {
         raycaster.setFromCamera(pos, camera);
-        var intersects = raycaster.intersectObjects(scene.children);
+        intersects = raycaster.intersectObjects(scene.children);
         var title = 'Items for clicked position "' + pos.x.toFixed(3) + ', ' + pos.y.toFixed(3) + '":';
         printInfo(title, intersects);
+    } else if (clickOnMapToSelectNode) {
+        raycaster.setFromCamera(pos, camera);
+        intersects = raycaster.intersectObjects(scene.children);
+        intersects = intersects.filter(function(item) { return item.object.originType === 'nodeOfInterest'; });
+        console.log(intersects);
+        // TODO - Output possibilities to remove!
+    } else {
+        var newNodeId = makeid(16);
+        var nodeTags = {};
+        if (nodeTypeSelected === 'shop') {
+            nodeTags['shop'] = 'shop';
+        } else if (nodeTypeSelected === 'restaurant') {
+            nodeTags['amenity'] = 'restaurant';
+        } else if (nodeTypeSelected === 'traffic-light') {
+            nodeTags['highway'] = 'traffic_signals';
+        }
+        var newMidNode = {
+            $: {
+                id: newNodeId,
+                lon: globalMapData.bounds.minX + Math.round(relativePos.x * globalMapData.bounds.width),
+                lat: globalMapData.bounds.maxY + Math.round((1-relativePos.y) * globalMapData.bounds.height)
+            },
+            tag: nodeTags
+        };
+        globalMapData.node[newNodeId] = newMidNode;
+        cleanupAndRerender();
     }
 }
 
@@ -929,7 +989,7 @@ function highlightNode(nodeId) {
     }
 }
 
-function addWayPart(positionData, scene, way) {
+function addWayPart(positionData, way) {
     // Create the part of the road
     var wayMaterial = new THREE.MeshBasicMaterial({color: wayPartColor});
     var geometry = new THREE.BoxGeometry(positionData.l, wayHeightMap, 0.0); // Y should be way size
@@ -946,7 +1006,7 @@ function addWayPart(positionData, scene, way) {
     way.wayParts.push(cube);
 }
 
-function addNodeObj(node, scene, way) {
+function addNodeObj(node, way) {
     if (!node.wayObjects) {
         node.wayObjects = [];
     }
@@ -1070,12 +1130,12 @@ function addWays() {
 
             var previousNode = getNode(way.nd[0].$.ref);
             for (var i = 1; i < way.nd.length; i++) {
-                addNodeObj(previousNode, scene, way);
+                addNodeObj(previousNode, way);
                 var currentNode = getNode(way.nd[i].$.ref);
-                addNodeObj(currentNode, scene, way);
+                addNodeObj(currentNode, way);
 
                 var wayPositionData = getPositionData(previousNode.$.lon, previousNode.$.lat, currentNode.$.lon, currentNode.$.lat);
-                addWayPart(wayPositionData, scene, way);
+                addWayPart(wayPositionData, way);
                 previousNode = currentNode;
             }
         } else {
@@ -1103,6 +1163,7 @@ function addWays() {
                 var sprite = new THREE.Sprite(material);
                 sprite.position.x = node.$.lon;
                 sprite.position.y = node.$.lat;
+                sprite.position.z = 10;
                 sprite.scale.x = globalMapData.bounds.width / resolution * 20;
                 sprite.scale.y = globalMapData.bounds.height / resolution * 20;
                 sprite.originType = 'nodeOfInterest';
@@ -1196,6 +1257,7 @@ function gatherNodesOfInterest() {
     );
 
     // Clean up traffic lights (only valid if we have 4 wayObjects to it...
+/*
     var trafficSignals = globalMapData.nodesOfInterest.trafficSignals;
     if (trafficSignals) {
         for (var i = 0; i < trafficSignals.length; i++) {
@@ -1205,6 +1267,7 @@ function gatherNodesOfInterest() {
             }
         }
     }
+*/
 }
 
 function isNodeOutside(lon, lat) {
