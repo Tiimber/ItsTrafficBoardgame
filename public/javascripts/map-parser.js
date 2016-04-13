@@ -248,6 +248,20 @@ function showInterestingNodesToolbar() {
     updateInterestingNodesToolbarInfo();
 }
 
+function removeAllInterestingNodes() {
+    bootbox.confirm('Are you sure you want to remove all of these nodes?', function(result) {
+        if (result) {
+            for (var sceneObjectIndex = 0; sceneObjectIndex < scene.children.length; sceneObjectIndex++) {
+                var sceneObject = scene.children[sceneObjectIndex];
+                if (sceneObject.originType === 'nodeOfInterest') {
+                    doRemoveNodeOfInterest(sceneObject.originId, true);
+                }
+            }
+            cleanupAndRerender();
+        }
+    });
+}
+
 function updateInterestingNodesToolbarInfo() {
     interestingNodeGroups.forEach(function(interestingNodeGroup) {
         var domNode = document.querySelector(interestingNodeGroup.domElementSelector);
@@ -573,11 +587,13 @@ function doRemoveWayPart(wayId, wayPartId, preventCleanupAndRerender) {
     }
 }
 
-function doRemoveNodeOfInterest(id) {
+function doRemoveNodeOfInterest(id, preventCleanupAndRerender) {
     var node = globalMapData.node[id];
     removeInterestingNodeTags(node);
     selectedInterestingMapNodes = null;
-    cleanupAndRerender();
+    if (!preventCleanupAndRerender) {
+        cleanupAndRerender();
+    }
 }
 
 function makeid(length, numbersOnly) {
@@ -1211,20 +1227,22 @@ function addWays() {
             var interestingNodeGroup = interestingNodeGroups[nodeGroupIndex];
             var interestingNodes = globalMapData.nodesOfInterest[interestingNodeGroup.name];
             interestingNodeGroup.count = 0;
-            for (var nodeIndex = 0; nodeIndex < interestingNodes.length; nodeIndex++) {
-                var node = interestingNodes[nodeIndex];
-                var image = new THREE.TextureLoader().load(interestingNodeGroup.icon, rerenderDebounced);
-                var material = new THREE.SpriteMaterial({map: image});
-                var sprite = new THREE.Sprite(material);
-                sprite.position.x = node.$.lon;
-                sprite.position.y = node.$.lat;
-                sprite.position.z = 10;
-                sprite.scale.x = globalMapData.bounds.width / resolution * 20;
-                sprite.scale.y = globalMapData.bounds.height / resolution * 20;
-                sprite.originType = 'nodeOfInterest';
-                sprite.originId = node.$.id;
-                scene.add(sprite);
-                interestingNodeGroup.count++;
+            if (interestingNodes) {
+                for (var nodeIndex = 0; nodeIndex < interestingNodes.length; nodeIndex++) {
+                    var node = interestingNodes[nodeIndex];
+                    var image = new THREE.TextureLoader().load(interestingNodeGroup.icon, rerenderDebounced);
+                    var material = new THREE.SpriteMaterial({map: image});
+                    var sprite = new THREE.Sprite(material);
+                    sprite.position.x = node.$.lon;
+                    sprite.position.y = node.$.lat;
+                    sprite.position.z = 10;
+                    sprite.scale.x = globalMapData.bounds.width / resolution * 20;
+                    sprite.scale.y = globalMapData.bounds.height / resolution * 20;
+                    sprite.originType = 'nodeOfInterest';
+                    sprite.originId = node.$.id;
+                    scene.add(sprite);
+                    interestingNodeGroup.count++;
+                }
             }
         }
     }

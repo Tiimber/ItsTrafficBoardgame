@@ -89,6 +89,10 @@ a.negative {
     color: red;
 }
 
+.center {
+    text-align: center;
+}
+
 .bold {
     font-weight: bold;
 }
@@ -195,4 +199,9 @@ a.negative {
 
 #nodeInfoMapNodeSelectedList {
     font-size: 14px;
+}
+
+.remove-all-interesting-nodes .interesting-node-text {
+    font-size: 16px;
+    margin-top: 0.5em;
 }
