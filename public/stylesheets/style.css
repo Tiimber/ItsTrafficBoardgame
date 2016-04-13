@@ -178,8 +178,11 @@ a.negative {
 }
 
 [data-nodeinfo] {
-    font-size: 1.5em;
+    font-size: 1em;
     font-weight: bold;
+    max-height: 100%;
+    overflow-y: scroll;
+    padding-right: 1em;
 }
 
 [data-nodetype][data-selected="true"] {
@@ -188,4 +191,8 @@ a.negative {
 
 #nodeTypeIfNodeSelected {
     font-weight: bold;
+}
+
+#nodeInfoMapNodeSelectedList {
+    font-size: 14px;
 }

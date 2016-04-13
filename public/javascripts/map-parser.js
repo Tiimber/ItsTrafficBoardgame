@@ -22,6 +22,15 @@ var highlightColors = {
         0xffff66,
         0xcc9966,
         0x66ffff
+    ],
+    nodeOfInterest: [
+        0xff0000,
+        0xff00aa,
+        0x00ff55,
+        0x0033ff,
+        0xcccc00,
+        0xff6600,
+        0x00ffff
     ]
 };
 
@@ -61,6 +70,8 @@ var interestingNodeGroups = [
         target: 3
     }
 ];
+
+var selectedInterestingMapNodes = null;
 var showInterestingNodes = false;
 var clickOnMapToSelectNode = true;
 var nodeTypeSelected = null;
@@ -189,7 +200,7 @@ function getHighlightColor(object, colorCounters) {
 }
 
 function selectHighlights() {
-    var colorCounters = {waypart: 0, node: 0};
+    var colorCounters = {waypart: 0, node: 0, nodeOfInterest: 0};
     for (var i = 0; i < highlighted.length; i++) {
         var object = highlighted[i].object || highlighted[i];
         object.material.originalColor = object.material.color.getHex();
@@ -203,6 +214,8 @@ function getTypeHTML(type) {
             return '<span class="fa fa-road type-icon"></span>';
         case 'node':
             return '<span class="fa fa-dot-circle-o type-icon"></span>';
+        case 'nodeOfInterest':
+            return '<span class="fa fa-crosshairs type-icon"></span>';
         default:
             return '<span class="fa fa-question type-icon"></span>';
 
@@ -253,6 +266,26 @@ function updateInterestingNodesToolbarInfo() {
     document.querySelector('#nodeInfoIfNodeSelected').style.display = nodeTypeSelected ? 'block' : 'none';
     if (nodeTypeSelected) {
         document.querySelector('#nodeTypeIfNodeSelected').innerHTML = nodeTypeSelected;
+    }
+
+
+    var hasInterestedSelectedNodes = selectedInterestingMapNodes && selectedInterestingMapNodes.length;
+    document.querySelector('#nodeInfoMapNodeSelected').style.display = hasInterestedSelectedNodes ? 'block' : 'none';
+    var nodeInfoMapNodeSelectedList = document.querySelector('#nodeInfoMapNodeSelectedList');
+    nodeInfoMapNodeSelectedList.style.display = hasInterestedSelectedNodes ? 'block' : 'none';
+    if (hasInterestedSelectedNodes) {
+        while (nodeInfoMapNodeSelectedList.firstChild) {
+            nodeInfoMapNodeSelectedList.removeChild(nodeInfoMapNodeSelectedList.firstChild);
+        }
+        var colorCounters = {nodeOfInterest: 0};
+        for (i = 0; i < selectedInterestingMapNodes.length; i++) {
+            var itemData = document.createElement('div');
+            itemData.style.marginLeft = '1em';
+            var object = selectedInterestingMapNodes[i].object;
+            var color = getRgbString(getHighlightColor(object, colorCounters));
+            itemData.innerHTML = getTypeHTML(object.originType) + '<span class="fa fa-square square" style="color: ' + color + ';"></span>' + getInfo(object.originType, object.originId, object.originWPId);
+            nodeInfoMapNodeSelectedList.appendChild(itemData);
+        }
     }
 }
 
@@ -346,6 +379,11 @@ function printInfo(title, data, cancelBtn, okCb) {
         highlighted = data;
         selectHighlights();
         window.render();
+    } else {
+        deselectHighlights();
+        highlighted = data;
+        selectHighlights();
+        window.render();
     }
 }
 
@@ -410,6 +448,9 @@ function getInfo(type, id, wayPartId) {
         data += ' <a class="inline fa fa-pencil" title="Edit the name of this way" onclick="editWayName(\'' + id + '\', \'' + (wayForPart.tag.name || '') + '\')"></a>'; // Edit this name
         data += ' <a class="inline fa fa-trash" title="Delete this part of the way" onclick="removeMapObj(\'' + type + '\', \'' + id + '\', \'' + wayPartId + '\')"></a>'; // Delete this way part
         data += ' <a class="inline fa fa-share-alt" title="Split this part of the way into two pieces" onclick="splitWayPart(\'' + type + '\', \'' + id + '\', \'' + wayPartId + '\')"></a>'; // Split this way part into two parts
+    } else if (type === 'nodeOfInterest') {
+        data = 'Node ' + getTags(globalMapData.node[id]);
+        data += ' <a class="inline fa fa-trash" title="Remove this node" onclick="removeMapObj(\'' + type + '\', \'' + id + '\')"></a>'; // Remove this node (or relation)
     } else {
         data = 'Node ' + getTags(globalMapData[type][id]);
         if (canRemove(type, id)) {
@@ -530,6 +571,13 @@ function doRemoveWayPart(wayId, wayPartId, preventCleanupAndRerender) {
     if (!preventCleanupAndRerender) {
         cleanupAndRerender();
     }
+}
+
+function doRemoveNodeOfInterest(id) {
+    var node = globalMapData.node[id];
+    removeInterestingNodeTags(node);
+    selectedInterestingMapNodes = null;
+    cleanupAndRerender();
 }
 
 function makeid(length, numbersOnly) {
@@ -787,14 +835,20 @@ function removeMapObj(type, id, wayPartId) {
             var child = scene.children[i];
             if (child.originType === type && child.originId === id && (!wayPartId || child.originWPId === parseInt(wayPartId, 10))) {
                 removeChild = child;
-                printInfo('Remove selected node?', [child], true, function () {
+                // Instant remove
+                if (type === 'nodeOfInterest') {
                     saveBackupData();
-                    if (type === 'node') {
-                        doRemoveNode(id);
-                    } else if (type === 'waypart') {
-                        doRemoveWayPart(id, parseInt(wayPartId, 10));
-                    }
-                });
+                    doRemoveNodeOfInterest(id);
+                } else {
+                    printInfo('Remove selected node?', [child], true, function () {
+                        saveBackupData();
+                        if (type === 'node') {
+                            doRemoveNode(id);
+                        } else if (type === 'waypart') {
+                            doRemoveWayPart(id, parseInt(wayPartId, 10));
+                        }
+                    });
+                }
                 break;
             }
         }
@@ -947,8 +1001,9 @@ function mouseOn(camera, raycaster, pos, relativePos) {
         raycaster.setFromCamera(pos, camera);
         intersects = raycaster.intersectObjects(scene.children);
         intersects = intersects.filter(function(item) { return item.object.originType === 'nodeOfInterest'; });
-        console.log(intersects);
-        // TODO - Output possibilities to remove!
+        selectedInterestingMapNodes = intersects;
+        updateInterestingNodesToolbarInfo();
+        printInfo(null, intersects);
     } else {
         var newNodeId = makeid(16);
         var nodeTags = {};
@@ -1187,6 +1242,16 @@ function hasTagWithValues(tags, key, values) {
     return false;
 }
 
+function removeTagWithValues(tags, key, values) {
+    values = [].splice.call(arguments, 2);
+
+    if (key in tags) {
+        if (values.indexOf(tags[key]) !== -1) {
+            delete tags[key];
+        }
+    }
+}
+
 function hasTags(tags, names) {
     names = [].splice.call(arguments, 1);
 
@@ -1199,19 +1264,63 @@ function hasTags(tags, names) {
     return false;
 }
 
+function removeTags(tags, names) {
+    names = [].splice.call(arguments, 1);
+
+    for (var i = 0; i < names.length; i++) {
+        if (names[i] in tags) {
+            delete tags[names[i]];
+        }
+    }
+}
+
+function isShop(tags) {return hasTags(tags, 'shop');}
+function isTrafficSignals(tags) {return hasTagWithValues(tags, 'highway', 'traffic_signals');}
+function isCrossing(tags) {return hasTagWithValues(tags, 'highway', 'crossing');}
+function isRestaurant(tags) {return hasTagWithValues(tags, 'amenity', 'fast_food', 'pub', 'restaurant', 'cafe');}
+function isTree(tags) {return hasTagWithValues(tags, 'natural', 'tree');}
+function isPublicTransport(tags) {return hasTagWithValues(tags, 'highway', 'bus_stop') || hasTagWithValues(tags, 'shelter_type', 'public_transport') || hasTagWithValues(tags, 'public_transport', 'platform');}
+function isHotel(tags) {return hasTagWithValues(tags, 'tourism', 'hotel');}
+function isATM(tags) {return hasTagWithValues(tags, 'amenity', 'atm');}
+function isParking(tags) {return hasTagWithValues(tags, 'amenity', 'parking');}
+
+function removeShop(tags) {removeTags(tags, 'shop');}
+function removeTrafficSignals(tags) {removeTagWithValues(tags, 'highway', 'traffic_signals');}
+function removeCrossing(tags) {removeTagWithValues(tags, 'highway', 'crossing');}
+function removeRestaurant(tags) {removeTagWithValues(tags, 'amenity', 'fast_food', 'pub', 'restaurant', 'cafe');}
+function removeTree(tags) {removeTagWithValues(tags, 'natural', 'tree');}
+function removePublicTransport(tags) {removeTagWithValues(tags, 'highway', 'bus_stop'); removeTagWithValues(tags, 'shelter_type', 'public_transport'); removeTagWithValues(tags, 'public_transport', 'platform');}
+function removeHotel(tags) {removeTagWithValues(tags, 'tourism', 'hotel');}
+function removeATM(tags) {removeTagWithValues(tags, 'amenity', 'atm');}
+function removeParking(tags) {removeTagWithValues(tags, 'amenity', 'parking');}
+
+function removeInterestingNodeTags(node) {
+    if ('tag' in node && Object.getOwnPropertyNames(node.tag).length) {
+        var tags = node.tag;
+        if (isShop(tags)) {
+            removeShop(tags);
+        } else if (isTrafficSignals(tags)) {
+            removeTrafficSignals(tags);
+        } else if (isCrossing(tags)) {
+            removeCrossing(tags);
+        } else if (isRestaurant(tags)) {
+            removeRestaurant(tags);
+        } else if (isTree(tags)) {
+            removeTree(tags);
+        } else if (isPublicTransport(tags)) {
+            removePublicTransport(tags);
+        } else if (isHotel(tags)) {
+            removeHotel(tags);
+        } else if (isATM(tags)) {
+            removAtm(tags);
+        } else if (isParking(tags)) {
+            removeParking(tags);
+        }
+    }
+}
 
 function gatherNodesOfInterest() {
     var nodeIds = Object.getOwnPropertyNames(globalMapData.node);
-
-    function isShop(tags) {return hasTags(tags, 'shop');}
-    function isTree(tags) {return hasTagWithValues(tags, 'natural', 'tree');}
-    function isTrafficSignals(tags) {return hasTagWithValues(tags, 'highway', 'traffic_signals');}
-    function isCrossing(tags) {return hasTagWithValues(tags, 'highway', 'crossing');}
-    function isRestaurant(tags) {return hasTagWithValues(tags, 'amenity', 'fast_food', 'pub', 'restaurant', 'cafe');}
-    function isPublicTransport(tags) {return hasTagWithValues(tags, 'highway', 'bus_stop') || hasTagWithValues(tags, 'shelter_type', 'public_transport') || hasTagWithValues(tags, 'public_transport', 'platform');}
-    function isHotel(tags) {return hasTagWithValues(tags, 'tourism', 'hotel');}
-    function isATM(tags) {return hasTagWithValues(tags, 'amenity', 'atm');}
-    function isParking(tags) {return hasTagWithValues(tags, 'amenity', 'parking');}
 
     globalMapData.nodesOfInterest = nodeIds.reduce(
         function (previous, key) {
