@@ -251,6 +251,7 @@ function showInterestingNodesToolbar() {
 function removeAllInterestingNodes() {
     bootbox.confirm('Are you sure you want to remove all of these nodes?', function(result) {
         if (result) {
+            saveBackupData();
             for (var sceneObjectIndex = 0; sceneObjectIndex < scene.children.length; sceneObjectIndex++) {
                 var sceneObject = scene.children[sceneObjectIndex];
                 if (sceneObject.originType === 'nodeOfInterest') {
@@ -703,6 +704,7 @@ function undo() {
         printInfo('', []);
         addWays();
         window.render();
+        updateInterestingNodesToolbarInfo();
 
         setUndoRedoState();
     }
@@ -721,6 +723,7 @@ function redo() {
         printInfo('', []);
         addWays();
         window.render();
+        updateInterestingNodesToolbarInfo();
 
         setUndoRedoState();
     }
@@ -1021,6 +1024,7 @@ function mouseOn(camera, raycaster, pos, relativePos) {
         updateInterestingNodesToolbarInfo();
         printInfo(null, intersects);
     } else {
+        saveBackupData();
         var newNodeId = makeid(16);
         var nodeTags = {};
         if (nodeTypeSelected === 'shop') {
