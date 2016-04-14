@@ -50,6 +50,7 @@ var targetNumberOfMapEntrances = 3;
 var interestingNodeGroups = [
     {
         name: 'trafficSignals',
+        label: 'Traffic Signals',
         icon: '/images/trafficLight_debug.png',
         domElementSelector: '[data-nodetype="traffic-light"]',
         type: 'traffic-light',
@@ -57,6 +58,7 @@ var interestingNodeGroups = [
     },
     {
         name: 'food',
+        label: 'Restaurants',
         icon: '/images/restaurant_debug.png',
         domElementSelector: '[data-nodetype="restaurant"]',
         type: 'restaurant',
@@ -64,6 +66,7 @@ var interestingNodeGroups = [
     },
     {
         name: 'shop',
+        label: 'Shops',
         icon: '/images/shop_debug.png',
         domElementSelector: '[data-nodetype="shop"]',
         type: 'shop',
@@ -134,7 +137,19 @@ function parseMapData() {
 }
 
 function presentInfo() {
-    var fullInfo = 'Map entrances/exits: <span class="bold ' + (mapEntranceNodes.length === targetNumberOfMapEntrances ? 'green' : 'red') + '">' + mapEntranceNodes.length + '</span> (Expected: ' + targetNumberOfMapEntrances + ')<br/>';
+    var currentPageIdNode = document.querySelector('.current-page-id');
+    var page = currentPageIdNode.innerHTML;
+
+    var fullInfo = '';
+    fullInfo += 'Map entrances/exits: <span class="bold ' + (mapEntranceNodes.length === targetNumberOfMapEntrances ? 'green' : 'red') + '">' + mapEntranceNodes.length + '</span> (Expected: ' + targetNumberOfMapEntrances + ')<br/>';
+
+    if (page !== 'preview') {
+        interestingNodeGroups.forEach(function(interestingNodeGroup) {
+            fullInfo += interestingNodeGroup.label + ': <span class="bold ' + (interestingNodeGroup.count === interestingNodeGroup.target ? 'green' : 'red') + '">' + interestingNodeGroup.count + '</span> (Expected: ' + interestingNodeGroup.target + ')<br/>';
+        });
+    } else {
+        fullInfo += '<br/>In next step, you will decide on waypoint nodes.'
+    }
     bootbox.dialog({
         title: 'Map summary',
         message: fullInfo

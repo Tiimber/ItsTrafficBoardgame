@@ -64,8 +64,12 @@ a.negative {
     color: #cccccc;
 }
 
-.top a.undo[data-disabled="false"], .top a.redo[data-disabled="false"], .top a.zoomin[data-disabled="false"], .top a.zoomout[data-disabled="false"], .top a.save[data-disabled="false"], .top a.load[data-disabled="false"] , .top a.upload[data-disabled="false"], .top a.download[data-disabled="false"], .top a.next-step[data-disabled="false"] {
+.top a.undo[data-disabled="false"], .top a.redo[data-disabled="false"], .top a.zoomin[data-disabled="false"], .top a.zoomout[data-disabled="false"], .top a.save[data-disabled="false"], .top a.load[data-disabled="false"] , .top a.upload[data-disabled="false"], .top a.download[data-disabled="false"] {
     color: #00b7ff;
+}
+
+.top a.next-step[data-disabled="false"] {
+    color: #77cc77;
 }
 
 .bottom {
