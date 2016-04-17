@@ -436,6 +436,12 @@ function canRemove(type, id) {
     return false;
 }
 
+function canRemoveMidNode(id) {
+    // Can only remove if this node has two wayparts connected
+    var node = getNode(id);
+    return node.wayObjects && node.wayObjects.length === 2 && node.wayObjects[0] === node.wayObjects[1];
+}
+
 function canMerge(type, id) {
     if (type === 'node') {
         // Can merge node only if it is an endpoint of one way
@@ -485,6 +491,9 @@ function getInfo(type, id, wayPartId) {
         data = 'Node ' + getTags(globalMapData[type][id]);
         if (canRemove(type, id)) {
             data += ' <a class="inline fa fa-trash" title="Remove this node" onclick="removeMapObj(\'' + type + '\', \'' + id + '\')"></a>'; // If possible - remove this node (or relation)
+        }
+        if (canRemoveMidNode(id)) {
+            data += ' <a class="inline fa fa-compress" title="Remove mid-node and merge two connected wayparts" onclick="removeMidNode(\'' + id + '\')"></a>' // If possible, remove this node and merge two connecting wayparts into one
         }
         if (canMerge(type, id)) {
             data += ' <a class="inline fa fa-arrows" title="Move (merge) this node with another" onclick="mergeMapObj(\'' + type + '\', \'' + id + '\')"></a>'; // If possible - merge this node into another one
@@ -887,6 +896,55 @@ function removeMapObj(type, id, wayPartId) {
             }
         }
     }
+}
+
+function wayObjectConnectedToNode(nodeId, wayId, wayObjectId) {
+    var way = globalMapData.way[wayId];
+
+    if (way && way.nd && way.wayParts) {
+        var i;
+        for (i = 0; i < way.nd.length; i++) {
+            if (way.nd[i].$.ref === nodeId) {
+                return (i > 0 && way.wayParts[i-1].originWPId === wayObjectId) || (i < way.wayParts.length && way.wayParts[i].originWPId === wayObjectId);
+            }
+        }
+    }
+
+    return false;
+}
+
+function doRemoveMidNode(nodeId, wayId) {
+    delete globalMapData.node[nodeId];
+    var way = globalMapData.way[wayId];
+    for (var wayNodeIndex = 0; wayNodeIndex < way.nd.length; wayNodeIndex++) {
+        var wayNode = way.nd[wayNodeIndex];
+        if (wayNode.$.ref === nodeId) {
+            way.nd.splice(wayNodeIndex, 1);
+            break;
+        }
+    }
+    cleanupAndRerender();
+}
+
+function removeMidNode(id) {
+    var node = globalMapData.node[id];
+    var mergeTogether = [];
+    var wayId = -1;
+    for (var i = 0; i < scene.children.length; i++) {
+        var child = scene.children[i];
+        if ((child.originType === 'node' && child.originId === id) || (child.originType === 'waypart' && wayObjectConnectedToNode(id, child.originId, child.originWPId))) {
+            if (child.originType === 'node') {
+                mergeTogether.splice(0, 0, child);
+            } else {
+                mergeTogether.push(child);
+                wayId = child.originId;
+            }
+        }
+    }
+    printInfo('Remove node and merge way parts?', mergeTogether, true, function () {
+        saveBackupData();
+        doRemoveMidNode(id, wayId);
+    });
 }
 
 function createWayBetweenNodes(data) {
